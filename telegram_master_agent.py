@@ -171,9 +171,10 @@ def load_memory_db():
     if collection is not None:
         try:
             docs = list(collection.find({}, {"_id": 0}))
-            debts = [d for d in docs if "person" in d]
-            notes = [n for n in docs if "person" not in n]
-            return {"debts_and_loans": debts, "notes": notes}
+            if docs:
+                debts = [d for d in docs if "person" in d]
+                notes = [n for n in docs if "person" not in n]
+                return {"debts_and_loans": debts, "notes": notes}
         except Exception as e:
             print(f"MongoDB Load Note: {e}")
             
@@ -215,20 +216,23 @@ def tool_save_memory(person: str, amount: str, details: str) -> str:
         except Exception as e:
             print(f"MongoDB Insert Note: {e}")
             
-    db = load_memory_db()
-    db["debts_and_loans"].append(entry)
-    with open(MEMORY_DB_FILE, 'w') as f:
-        json.dump(db, f, indent=2)
+    try:
+        db = load_memory_db()
+        db["debts_and_loans"].append(entry)
+        with open(MEMORY_DB_FILE, 'w') as f:
+            json.dump(db, f, indent=2)
+    except Exception as fs_err:
+        print(f"File write note (Cloud container): {fs_err}")
         
     return (
-        f"📝 *RECORDED IN CLOUD MONEY LEDGER!*\n"
+        f"📝 RECORDED IN CLOUD MONEY LEDGER!\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *Person:* {entry['person']}\n"
-        f"💰 *Amount:* {entry['amount']}\n"
-        f"📌 *Details:* {entry['details']}\n"
-        f"📅 *Date:* {timestamp}\n"
+        f"👤 Person: {entry['person']}\n"
+        f"💰 Amount: {entry['amount']}\n"
+        f"📌 Details: {entry['details']}\n"
+        f"📅 Date: {timestamp}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"_Saved permanently in Cloud Database!_"
+        f"Saved permanently in Cloud Database!"
     )
 
 def tool_search_memory(query: str = "") -> str:
@@ -240,19 +244,19 @@ def tool_search_memory(query: str = "") -> str:
     if not debts and not notes:
         return "🧠 Your persistent Cloud Database is currently empty."
         
-    lines = ["📝 *[YOUR PERMANENT CLOUD MONEY LEDGER]*", "━━━━━━━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["📝 [YOUR PERMANENT CLOUD MONEY LEDGER]", "━━━━━━━━━━━━━━━━━━━━━━━━━━"]
     if debts:
-        lines.append("💰 *DEBTS & MONEY RECORDS:*")
+        lines.append("💰 DEBTS & MONEY RECORDS:")
         for idx, d in enumerate(debts, 1):
-            lines.append(f"{idx}. *{d.get('person')}*: {d.get('amount')} - {d.get('details')} _({d.get('date')})_")
+            lines.append(f"{idx}. {d.get('person')}: {d.get('amount')} - {d.get('details')} ({d.get('date')})")
             
     if notes:
-        lines.append("\n📌 *NOTES & REMINDERS:*")
+        lines.append("\n📌 NOTES & REMINDERS:")
         for idx, n in enumerate(notes, 1):
-            lines.append(f"{idx}. {n.get('details')} _({n.get('date')})_")
+            lines.append(f"{idx}. {n.get('details')} ({n.get('date')})")
             
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append("_Synced permanently via Cloud Database_")
+    lines.append("Synced permanently via Cloud Database")
     return "\n".join(lines)
 
 # ==========================================
@@ -307,7 +311,6 @@ def agent_brain(user_text: str) -> str:
             system_instruction = """
             You are an elite, highly intelligent Autonomous Personal AI Assistant for the user.
             You communicate directly over Telegram.
-            Format all output neatly using Telegram Markdown with clear headings, bullet points, and clean emojis.
             Be warm, professional, concise, and executive.
             """
 
@@ -333,7 +336,7 @@ def agent_brain(user_text: str) -> str:
     return f"🤖 Personal Agent: Processed request '{user_text}'."
 
 # ==========================================
-# TELEGRAM BOT POLLING ENGINE
+# TELEGRAM BOT POLLING ENGINE (WITH SAFE SEND)
 # ==========================================
 def send_telegram_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -344,7 +347,12 @@ def send_telegram_message(chat_id, text):
     }
     try:
         res = requests.post(url, json=payload)
-        print(f"Telegram Send Response: {res.status_code}")
+        if res.status_code != 200:
+            payload_plain = {"chat_id": chat_id, "text": text}
+            res_plain = requests.post(url, json=payload_plain)
+            print(f"Telegram Fallback Send Status: {res_plain.status_code}")
+        else:
+            print(f"Telegram Send Status: 200 OK")
     except Exception as e:
         print(f"Telegram send error: {e}")
 
