@@ -50,7 +50,7 @@ TELEGRAM_BOT_TOKEN = raw_tok if (raw_tok and len(raw_tok) > 10) else "8894589298
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
 MONGODB_URI = os.environ.get("MONGODB_URI", "")
-MEMORY_DB_FILE = "user_memory_ledger.json"
+MEMORY_DB_FILE = "/tmp/user_memory_ledger.json" if os.path.exists("/tmp") else "user_memory_ledger.json"
 
 DEFAULT_MEMORY_BASE64 = "ewogICJkZWJ0c19hbmRfbG9hbnMiOiBbCiAgICB7CiAgICAgICJwZXJzb24iOiAiQWlzaCIsCiAgICAgICJhbW91bnQiOiAiJDIzNi41MSArICQyNDMuNjIgKFRvdGFsOiAkNDgwLjEzKSIsCiAgICAgICJkZXRhaWxzIjogIkNhciByZWdvIHBheW1lbnRzIGZvciBoZXIgY2FyIiwKICAgICAgImRhdGUiOiAiMjAyNi0wOC0wMiAyMzowOSIKICAgIH0KICBdLAogICJub3RlcyI6IFtdCn0="
 
@@ -159,7 +159,12 @@ def tool_get_calendar_events() -> str:
 def get_mongo_collection():
     if pymongo and MONGODB_URI:
         try:
-            client = pymongo.MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+            client = pymongo.MongoClient(
+                MONGODB_URI,
+                tls=True,
+                tlsAllowInvalidCertificates=True,
+                serverSelectionTimeoutMS=5000
+            )
             db = client["telegram_agent_db"]
             return db["memory_ledger"]
         except Exception as e:
@@ -170,10 +175,14 @@ def load_memory_db():
     collection = get_mongo_collection()
     if collection is not None:
         try:
-            docs = list(collection.find({}, {"_id": 0}))
-            if docs:
-                debts = [d for d in docs if "person" in d]
-                notes = [n for n in docs if "person" not in n]
+            raw_docs = list(collection.find({}, {"_id": 0}))
+            if raw_docs:
+                clean_docs = []
+                for d in raw_docs:
+                    clean_doc = {k: str(v) for k, v in d.items()}
+                    clean_docs.append(clean_doc)
+                debts = [d for d in clean_docs if "person" in d]
+                notes = [n for n in clean_docs if "person" not in n]
                 return {"debts_and_loans": debts, "notes": notes}
         except Exception as e:
             print(f"MongoDB Load Note: {e}")
@@ -202,9 +211,9 @@ def tool_save_memory(person: str, amount: str, details: str) -> str:
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     
     entry = {
-        "person": person or "General Note",
-        "amount": amount or "N/A",
-        "details": details or "Note",
+        "person": str(person or "General Note"),
+        "amount": str(amount or "N/A"),
+        "details": str(details or "Note"),
         "date": timestamp
     }
     
@@ -222,7 +231,7 @@ def tool_save_memory(person: str, amount: str, details: str) -> str:
         with open(MEMORY_DB_FILE, 'w') as f:
             json.dump(db, f, indent=2)
     except Exception as fs_err:
-        print(f"File write note (Cloud container): {fs_err}")
+        print(f"File write note: {fs_err}")
         
     return (
         f"📝 RECORDED IN CLOUD MONEY LEDGER!\n"
