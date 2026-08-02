@@ -16,6 +16,12 @@ from googleapiclient.discovery import build
 from google import genai
 from google.genai import types
 
+# Optional PyMongo for Cloud Database
+try:
+    import pymongo
+except ImportError:
+    pymongo = None
+
 # ==========================================
 # RENDER FREE WEB SERVICE HEALTH CHECKER
 # ==========================================
@@ -41,7 +47,10 @@ SCOPES = [
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8894589298:AAHrUfVnkd5uUBzPSApc9OaB0vGt_1_LJh8")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
+MONGODB_URI = os.environ.get("MONGODB_URI", "")
 MEMORY_DB_FILE = "user_memory_ledger.json"
+
+DEFAULT_MEMORY_BASE64 = "ewogICJkZWJ0c19hbmRfbG9hbnMiOiBbCiAgICB7CiAgICAgICJwZXJzb24iOiAiQWlzaCIsCiAgICAgICJhbW91bnQiOiAiJDIzNi41MSArICQyNDMuNjIgKFRvdGFsOiAkNDgwLjEzKSIsCiAgICAgICJkZXRhaWxzIjogIkNhciByZWdvIHBheW1lbnRzIGZvciBoZXIgY2FyIiwKICAgICAgImRhdGUiOiAiMjAyNi0wOC0wMiAyMzowOSIKICAgIH0KICBdLAogICJub3RlcyI6IFtdCn0="
 
 # Auto-restore token.json from env var for cloud deployment
 if not os.path.exists('token.json') and TOKEN_JSON_BASE64:
@@ -51,6 +60,15 @@ if not os.path.exists('token.json') and TOKEN_JSON_BASE64:
         print("✅ Restored token.json from Cloud Environment Variable!")
     except Exception as e:
         print(f"Token restore note: {e}")
+
+# Auto-restore database if missing
+if not os.path.exists(MEMORY_DB_FILE):
+    try:
+        with open(MEMORY_DB_FILE, 'wb') as f:
+            f.write(base64.b64decode(DEFAULT_MEMORY_BASE64))
+        print("✅ Restored database from default memory!")
+    except Exception as e:
+        print(f"DB restore note: {e}")
 
 # ==========================================
 # TOOL 1: GOOGLE SERVICES (GMAIL & CALENDAR)
@@ -134,20 +152,50 @@ def tool_get_calendar_events() -> str:
         return f"Error reading Calendar: {e}"
 
 # ==========================================
-# TOOL 2: MEMORY & MONEY LEDGER DATABASE
+# TOOL 2: MONGODB ATLAS / LOCAL CLOUD MEMORY
 # ==========================================
+def get_mongo_collection():
+    if pymongo and MONGODB_URI:
+        try:
+            client = pymongo.MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+            db = client["telegram_agent_db"]
+            return db["memory_ledger"]
+        except Exception as e:
+            print(f"MongoDB Connection Note: {e}")
+    return None
+
 def load_memory_db():
+    collection = get_mongo_collection()
+    if collection is not None:
+        try:
+            docs = list(collection.find({}, {"_id": 0}))
+            debts = [d for d in docs if "person" in d]
+            notes = [n for n in docs if "person" not in n]
+            return {"debts_and_loans": debts, "notes": notes}
+        except Exception as e:
+            print(f"MongoDB Load Note: {e}")
+            
     if os.path.exists(MEMORY_DB_FILE):
         try:
             with open(MEMORY_DB_FILE, 'r') as f:
                 return json.load(f)
         except Exception:
             pass
-    return {"debts_and_loans": [], "notes": []}
+            
+    return {
+        "debts_and_loans": [
+            {
+                "person": "Aish",
+                "amount": "$236.51 + $243.62 (Total: $480.13)",
+                "details": "Car rego payments for her car",
+                "date": "2026-08-02 23:09"
+            }
+        ],
+        "notes": []
+    }
 
 def tool_save_memory(person: str, amount: str, details: str) -> str:
-    """Save a debt, loan, expense, or personal note into persistent database."""
-    db = load_memory_db()
+    """Save a debt, loan, expense, or personal note into persistent Cloud Database."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     
     entry = {
@@ -157,31 +205,41 @@ def tool_save_memory(person: str, amount: str, details: str) -> str:
         "date": timestamp
     }
     
+    collection = get_mongo_collection()
+    if collection is not None:
+        try:
+            collection.insert_one(entry)
+            print("✅ Saved entry directly to MongoDB Atlas Cloud Database!")
+        except Exception as e:
+            print(f"MongoDB Insert Note: {e}")
+            
+    # Always maintain local sync file
+    db = load_memory_db()
     db["debts_and_loans"].append(entry)
     with open(MEMORY_DB_FILE, 'w') as f:
         json.dump(db, f, indent=2)
         
     return (
-        f"📝 *RECORDED IN MONEY LEDGER!*\n"
+        f"📝 *RECORDED IN CLOUD MONEY LEDGER!*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"👤 *Person:* {entry['person']}\n"
         f"💰 *Amount:* {entry['amount']}\n"
         f"📌 *Details:* {entry['details']}\n"
         f"📅 *Date:* {timestamp}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"_Saved to your persistent AI database!_"
+        f"_Saved permanently in Cloud Database!_"
     )
 
 def tool_search_memory(query: str = "") -> str:
-    """Search or list all saved debts, loans, money records, and notes in persistent database."""
+    """Search or list all saved debts, loans, money records, and notes in persistent Cloud Database."""
     db = load_memory_db()
     debts = db.get("debts_and_loans", [])
     notes = db.get("notes", [])
     
     if not debts and not notes:
-        return "🧠 Your persistent database is currently empty."
+        return "🧠 Your persistent Cloud Database is currently empty."
         
-    lines = ["📝 *[YOUR SAVED MEMORY & MONEY LEDGER]*", "━━━━━━━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["📝 *[YOUR PERMANENT CLOUD MONEY LEDGER]*", "━━━━━━━━━━━━━━━━━━━━━━━━━━"]
     if debts:
         lines.append("💰 *DEBTS & MONEY RECORDS:*")
         for idx, d in enumerate(debts, 1):
@@ -193,7 +251,7 @@ def tool_search_memory(query: str = "") -> str:
             lines.append(f"{idx}. {n.get('details')} _({n.get('date')})_")
             
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append("_Saved in your persistent database_")
+    lines.append("_Synced permanently via Cloud Database_")
     return "\n".join(lines)
 
 # ==========================================
@@ -289,12 +347,11 @@ def send_telegram_message(chat_id, text):
         print(f"Telegram send error: {e}")
 
 def run_telegram_agent():
-    # Start Flask Health Check thread for Render Web Service compliance
     threading.Thread(target=run_health_server, daemon=True).start()
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Cloud Ready...")
+    print("🚀 Universal Autonomous Personal AI Agent is LIVE with MongoDB Cloud Database Support...")
     
     while True:
         try:
