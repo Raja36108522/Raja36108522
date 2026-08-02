@@ -213,7 +213,6 @@ def tool_save_memory(person: str, amount: str, details: str) -> str:
         except Exception as e:
             print(f"MongoDB Insert Note: {e}")
             
-    # Always maintain local sync file
     db = load_memory_db()
     db["debts_and_loans"].append(entry)
     with open(MEMORY_DB_FILE, 'w') as f:
@@ -280,56 +279,60 @@ def call_gemini_with_retry(client, prompt, system_instruction=None):
 # UNIVERSAL AUTONOMOUS LLM BRAIN (GEMINI 2.0)
 # ==========================================
 def agent_brain(user_text: str) -> str:
-    if not GEMINI_API_KEY:
-        return "⚠️ GEMINI_API_KEY environment variable is missing. Please add GEMINI_API_KEY to Render Environment Variables."
-        
-    client = genai.Client(api_key=GEMINI_API_KEY)
     text_lower = user_text.lower()
     
-    system_instruction = """
-    You are an elite, highly intelligent Autonomous Personal AI Assistant for the user.
-    You communicate directly over Telegram.
-    Format all output neatly using Telegram Markdown with clear headings, bullet points, and clean emojis.
-    Be warm, professional, concise, and executive.
-    """
-    
+    # 1. Direct Intent: Database Memory & Ledger Query (works without requiring Gemini key)
     is_ledger_query = (
-        any(w in text_lower for w in ["owe", "own", "who", "how much", "ledger", "memory", "saved", "database", "notes", "aish", "john"]) and
+        any(w in text_lower for w in ["owe", "own", "who", "how much", "ledger", "memory", "saved", "database", "notes", "aish", "rajesh", "john"]) and
         any(w in text_lower for w in ["show", "list", "who", "how", "what", "tell", "get", "my"])
     ) or text_lower.strip() in ["show", "ledger", "memory", "list"]
     
     if is_ledger_query:
         return tool_search_memory()
         
+    # 2. Direct Intent: Record Money / Memory (works without requiring Gemini key)
     is_recording = (
         any(w in text_lower for w in ["remember", "record", "save", "paid", "spent", "lent", "borrowed"]) or 
         (("$" in user_text or re.search(r'\d+\.\d+|\d+', user_text)) and ("pay" in text_lower or "rego" in text_lower or "cost" in text_lower))
     )
     
     if is_recording and not is_ledger_query:
-        person = "Aish" if "aish" in text_lower else ("John" if "john" in text_lower else "Record")
-        return tool_save_memory(person, "Extracted from message", user_text)
+        person = "Rajesh Anna" if "rajesh" in text_lower else ("Aish" if "aish" in text_lower else ("John" if "john" in text_lower else "Record"))
+        amount = "$0 (Settled)" if "nothing" in text_lower or "0" in user_text else "Recorded Amount"
+        return tool_save_memory(person, amount, user_text)
 
-    if any(w in text_lower for w in ["email", "mail", "inbox", "vicroads", "anz", "origin", "kogan", "powershop"]):
-        q = "vicroads" if "vicroads" in text_lower or "rego" in text_lower else ("is:unread" if "unread" in text_lower else text_lower)
-        tool_result = tool_search_gmail(q)
+    # If Gemini Key is present, run full Gemini LLM intelligence
+    if GEMINI_API_KEY:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        system_instruction = """
+        You are an elite, highly intelligent Autonomous Personal AI Assistant for the user.
+        You communicate directly over Telegram.
+        Format all output neatly using Telegram Markdown with clear headings, bullet points, and clean emojis.
+        Be warm, professional, concise, and executive.
+        """
+
+        if any(w in text_lower for w in ["email", "mail", "inbox", "vicroads", "anz", "origin", "kogan", "powershop"]):
+            q = "vicroads" if "vicroads" in text_lower or "rego" in text_lower else ("is:unread" if "unread" in text_lower else text_lower)
+            tool_result = tool_search_gmail(q)
+            try:
+                return call_gemini_with_retry(client, f"User asked: {user_text}\nEmail results:\n{tool_result}", system_instruction)
+            except Exception:
+                return tool_result
+
+        if any(w in text_lower for w in ["calendar", "schedule", "event", "upcoming bills"]):
+            tool_result = tool_get_calendar_events()
+            try:
+                return call_gemini_with_retry(client, f"User asked: {user_text}\nCalendar results:\n{tool_result}", system_instruction)
+            except Exception:
+                return tool_result
+
         try:
-            return call_gemini_with_retry(client, f"User asked: {user_text}\nEmail results:\n{tool_result}", system_instruction)
-        except Exception:
-            return tool_result
-
-    if any(w in text_lower for w in ["calendar", "schedule", "event", "upcoming bills"]):
-        tool_result = tool_get_calendar_events()
-        try:
-            return call_gemini_with_retry(client, f"User asked: {user_text}\nCalendar results:\n{tool_result}", system_instruction)
-        except Exception:
-            return tool_result
-
-    try:
-        return call_gemini_with_retry(client, user_text, system_instruction)
-    except Exception as e:
-        print(f"Fallback note: {e}")
-        return f"🤖 Personal Agent: Received your request '{user_text}'."
+            return call_gemini_with_retry(client, user_text, system_instruction)
+        except Exception as e:
+            print(f"Fallback note: {e}")
+            return f"🤖 Personal Agent: Received your request '{user_text}'."
+            
+    return f"🤖 Personal Agent: Processed request '{user_text}'."
 
 # ==========================================
 # TELEGRAM BOT POLLING ENGINE
@@ -351,7 +354,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print("🚀 Universal Autonomous Personal AI Agent is LIVE with MongoDB Cloud Database Support...")
+    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Independent...")
     
     while True:
         try:
