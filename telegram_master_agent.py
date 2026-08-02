@@ -6,13 +6,29 @@ import html
 import re
 import base64
 import datetime
+import threading
 import requests
+from flask import Flask
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google import genai
 from google.genai import types
+
+# ==========================================
+# RENDER FREE WEB SERVICE HEALTH CHECKER
+# ==========================================
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "🟢 OK - Telegram Personal AI Agent is Running 24/7 Live!", 200
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🚀 Starting Render Health Check Web Server on Port {port}...")
+    app.run(host='0.0.0.0', port=port)
 
 # ==========================================
 # CONFIGURATION & KEYS (SECURE CLOUD ENV)
@@ -273,9 +289,12 @@ def send_telegram_message(chat_id, text):
         print(f"Telegram send error: {e}")
 
 def run_telegram_agent():
+    # Start Flask Health Check thread for Render Web Service compliance
+    threading.Thread(target=run_health_server, daemon=True).start()
+    
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Secure...")
+    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Cloud Ready...")
     
     while True:
         try:
