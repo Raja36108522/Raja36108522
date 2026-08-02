@@ -44,7 +44,9 @@ SCOPES = [
     'https://www.googleapis.com/auth/calendar.events'
 ]
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8894589298:AAHrUfVnkd5uUBzPSApc9OaB0vGt_1_LJh8")
+raw_tok = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = raw_tok if (raw_tok and len(raw_tok) > 10) else "8894589298:AAHrUfVnkd5uUBzPSApc9OaB0vGt_1_LJh8"
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
 MONGODB_URI = os.environ.get("MONGODB_URI", "")
@@ -281,7 +283,6 @@ def call_gemini_with_retry(client, prompt, system_instruction=None):
 def agent_brain(user_text: str) -> str:
     text_lower = user_text.lower()
     
-    # 1. Direct Intent: Database Memory & Ledger Query (works without requiring Gemini key)
     is_ledger_query = (
         any(w in text_lower for w in ["owe", "own", "who", "how much", "ledger", "memory", "saved", "database", "notes", "aish", "rajesh", "john"]) and
         any(w in text_lower for w in ["show", "list", "who", "how", "what", "tell", "get", "my"])
@@ -290,7 +291,6 @@ def agent_brain(user_text: str) -> str:
     if is_ledger_query:
         return tool_search_memory()
         
-    # 2. Direct Intent: Record Money / Memory (works without requiring Gemini key)
     is_recording = (
         any(w in text_lower for w in ["remember", "record", "save", "paid", "spent", "lent", "borrowed"]) or 
         (("$" in user_text or re.search(r'\d+\.\d+|\d+', user_text)) and ("pay" in text_lower or "rego" in text_lower or "cost" in text_lower))
@@ -301,36 +301,34 @@ def agent_brain(user_text: str) -> str:
         amount = "$0 (Settled)" if "nothing" in text_lower or "0" in user_text else "Recorded Amount"
         return tool_save_memory(person, amount, user_text)
 
-    # If Gemini Key is present, run full Gemini LLM intelligence
     if GEMINI_API_KEY:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        system_instruction = """
-        You are an elite, highly intelligent Autonomous Personal AI Assistant for the user.
-        You communicate directly over Telegram.
-        Format all output neatly using Telegram Markdown with clear headings, bullet points, and clean emojis.
-        Be warm, professional, concise, and executive.
-        """
-
-        if any(w in text_lower for w in ["email", "mail", "inbox", "vicroads", "anz", "origin", "kogan", "powershop"]):
-            q = "vicroads" if "vicroads" in text_lower or "rego" in text_lower else ("is:unread" if "unread" in text_lower else text_lower)
-            tool_result = tool_search_gmail(q)
-            try:
-                return call_gemini_with_retry(client, f"User asked: {user_text}\nEmail results:\n{tool_result}", system_instruction)
-            except Exception:
-                return tool_result
-
-        if any(w in text_lower for w in ["calendar", "schedule", "event", "upcoming bills"]):
-            tool_result = tool_get_calendar_events()
-            try:
-                return call_gemini_with_retry(client, f"User asked: {user_text}\nCalendar results:\n{tool_result}", system_instruction)
-            except Exception:
-                return tool_result
-
         try:
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            system_instruction = """
+            You are an elite, highly intelligent Autonomous Personal AI Assistant for the user.
+            You communicate directly over Telegram.
+            Format all output neatly using Telegram Markdown with clear headings, bullet points, and clean emojis.
+            Be warm, professional, concise, and executive.
+            """
+
+            if any(w in text_lower for w in ["email", "mail", "inbox", "vicroads", "anz", "origin", "kogan", "powershop"]):
+                q = "vicroads" if "vicroads" in text_lower or "rego" in text_lower else ("is:unread" if "unread" in text_lower else text_lower)
+                tool_result = tool_search_gmail(q)
+                try:
+                    return call_gemini_with_retry(client, f"User asked: {user_text}\nEmail results:\n{tool_result}", system_instruction)
+                except Exception:
+                    return tool_result
+
+            if any(w in text_lower for w in ["calendar", "schedule", "event", "upcoming bills"]):
+                tool_result = tool_get_calendar_events()
+                try:
+                    return call_gemini_with_retry(client, f"User asked: {user_text}\nCalendar results:\n{tool_result}", system_instruction)
+                except Exception:
+                    return tool_result
+
             return call_gemini_with_retry(client, user_text, system_instruction)
         except Exception as e:
-            print(f"Fallback note: {e}")
-            return f"🤖 Personal Agent: Received your request '{user_text}'."
+            print(f"Gemini LLM note: {e}")
             
     return f"🤖 Personal Agent: Processed request '{user_text}'."
 
@@ -345,7 +343,8 @@ def send_telegram_message(chat_id, text):
         "parse_mode": "Markdown"
     }
     try:
-        requests.post(url, json=payload)
+        res = requests.post(url, json=payload)
+        print(f"Telegram Send Response: {res.status_code}")
     except Exception as e:
         print(f"Telegram send error: {e}")
 
@@ -354,7 +353,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Independent...")
+    print(f"🚀 Telegram Bot Polling Token: {TELEGRAM_BOT_TOKEN[:15]}...")
     
     while True:
         try:
@@ -372,9 +371,12 @@ def run_telegram_agent():
                         reply = agent_brain(text)
                         print(f"🤖 Universal Agent Reply:\n{reply}")
                         send_telegram_message(chat_id, reply)
+            else:
+                print(f"Polling HTTP Error: {res.status_code} | {res.text}")
+                time.sleep(5)
         except Exception as e:
-            print(f"Polling loop note: {e}")
-            time.sleep(2)
+            print(f"Polling loop exception: {e}")
+            time.sleep(3)
 
 if __name__ == '__main__':
     run_telegram_agent()
