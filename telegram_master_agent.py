@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 
 # ==========================================
-# CONFIGURATION & KEYS
+# CONFIGURATION & KEYS (SECURE CLOUD ENV)
 # ==========================================
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.modify',
@@ -23,8 +23,8 @@ SCOPES = [
 ]
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8894589298:AAHrUfVnkd5uUBzPSApc9OaB0vGt_1_LJh8")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6KGawW4Zt583Rcg_uBG6a3t6AdFhB0Rbwbffhm157xQQg")
-TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "eyJ0b2tlbiI6ICJ5YTI5LmEwQVJHbnUwYW1Tb2RPZVNEU0JWOTZPMFZVOWtGcE83VExDODBMdEY0NTV3RHg4M3FmbXZ5bkJMeVRhVjd0eVZROHg0a050czBNVHBpeDFwRXF0dmltTkRGZ2xCaFhfTWtGSTdFdF9IOTJnRWtuenB6Q3JaZElULVlUbUUwRWhEUGFia0ZGekxvMmRreUFhLTNvMXdJSGpnZW9ob1NkMVlxMEZWQnJWTjlxSElvWlMyelBYT1czd0d1VjI2cUdiRnAydklNTU9tVWFDZ1lLQWVBU0FSSVNGUUhHWDJNaUh5d1F2dFZfdTl0REN4eWN6enhpc3cwMjA2IiwgInJlZnJlc2hfdG9rZW4iOiAiMS8vMGdBbEtxRXVoRjR0MUNnWUlBUkFBR0JBU053Ri1MOUlyUDYxN0hzTkdtUkFLb0hpNXo2azVLZXVqWF9MWEpVbnJFVDRYRy01TmliNzdXNEM0bHVxYUpfNWJfNlVxVnRfb2Y0NCIsICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLCAiY2xpZW50X2lkIjogIjM0MzU3NDQ4MjE1MS1zZjZvZ3RzbjBrdWI3NDA4MHM3cjB2bHZ1Zjhwdm9yNC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsICJjbGllbnRfc2VjcmV0IjogIkdPQ1NQWC0waEhERlhrcnJyaWxuZi0xVFNpc09WQm1vUm5rIiwgInNjb3BlcyI6IFsiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vYXV0aC9nbWFpbC5tb2RpZnkiLCAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vYXV0aC9jYWxlbmRhci5ldmVudHMiXSwgInVuaXZlcnNlX2RvbWFpbiI6ICJnb29nbGVhcGlzLmNvbSIsICJhY2NvdW50IjogIiIsICJleHBpcnkiOiAiMjAyNi0wOC0wMlQxMzo1MTo1My4xMjU5MjVaIn0=")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
 MEMORY_DB_FILE = "user_memory_ledger.json"
 
 # Auto-restore token.json from env var for cloud deployment
@@ -55,7 +55,16 @@ def get_google_services():
                     token.write(creds.to_json())
             except Exception:
                 creds = None
-                
+        else:
+            if os.path.exists('credentials.json'):
+                try:
+                    flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                    creds = flow.run_local_server(port=0)
+                    with open('token.json', 'w') as token:
+                        token.write(creds.to_json())
+                except Exception:
+                    creds = None
+                    
     if creds and creds.valid:
         gmail = build('gmail', 'v1', credentials=creds)
         cal = build('calendar', 'v3', credentials=creds)
@@ -121,7 +130,7 @@ def load_memory_db():
     return {"debts_and_loans": [], "notes": []}
 
 def tool_save_memory(person: str, amount: str, details: str) -> str:
-    """Save a debt, loan, expense, or personal note into user's persistent database."""
+    """Save a debt, loan, expense, or personal note into persistent database."""
     db = load_memory_db()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -197,6 +206,9 @@ def call_gemini_with_retry(client, prompt, system_instruction=None):
 # UNIVERSAL AUTONOMOUS LLM BRAIN (GEMINI 2.0)
 # ==========================================
 def agent_brain(user_text: str) -> str:
+    if not GEMINI_API_KEY:
+        return "⚠️ GEMINI_API_KEY environment variable is missing. Please add GEMINI_API_KEY to Render Environment Variables."
+        
     client = genai.Client(api_key=GEMINI_API_KEY)
     text_lower = user_text.lower()
     
@@ -263,7 +275,7 @@ def send_telegram_message(chat_id, text):
 def run_telegram_agent():
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Cloud Ready...")
+    print("🚀 Universal Autonomous Personal AI Agent is LIVE & Secure...")
     
     while True:
         try:
