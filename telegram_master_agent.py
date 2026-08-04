@@ -146,7 +146,7 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ROBUST HTML NORMALIZER)
+# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO HARDCODED PLATES!)
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
     """Submit ANY plate dynamically to official VicRoads web portal and parse returned HTML live."""
@@ -223,11 +223,12 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                             elif l_lower == "colour" and idx + 1 < len(lines):
                                 colour = lines[idx + 1]
                             elif ("vin" in l_lower or "chassis" in l_lower) and idx + 1 < len(lines):
-                                if not vin and lines[idx + 1].lower() != 'number':
-                                    vin = lines[idx + 1]
+                                potential_vin = lines[idx + 1]
+                                if re.match(r'^[A-HJ-NPR-Z0-9]{10,17}$', potential_vin.upper()):
+                                    vin = potential_vin
 
                         if status_expiry or make:
-                            vin_str = f"\n  • *VIN:* `{vin}`" if (vin and len(vin) > 5) else ""
+                            vin_str = f"\n  • *VIN:* `{vin}`" if vin else ""
                             return (
                                 f"🏎️ *Plate `{clean_plate}`:*\n"
                                 f"  • *Status & Expiry:* *{status_expiry}*\n"
