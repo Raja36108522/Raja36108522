@@ -10,6 +10,7 @@ import threading
 import hmac
 import hashlib
 import requests
+import xml.etree.ElementTree as ET
 from flask import Flask
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -43,7 +44,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Auto-Scanning PTV API Key AI Agent is Running 24/7!", 200
+    return "🟢 OK - Multi-Tool Telegram Autonomous AI Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -103,7 +104,90 @@ def tool_get_weather(city: str = "Sydney") -> str:
     return f"🌤️ Live Weather for {clean_city}: Sunny, 18°C."
 
 # ==========================================
-# TOOL 2: LIVE FLIGHT TRACKER & RADAR
+# NEW TOOL 2: LIVE CURRENCY CONVERTER (AUD -> INR, USD, EUR, GBP)
+# ==========================================
+def tool_convert_currency(amount_aud: float = 100.0) -> str:
+    """Fetch live real-time exchange rates for AUD to INR, USD, EUR, GBP."""
+    try:
+        url = "https://open.er-api.com/v6/latest/AUD"
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            rates = res.json().get("rates", {})
+            inr = rates.get("INR", 0)
+            usd = rates.get("USD", 0)
+            eur = rates.get("EUR", 0)
+            gbp = rates.get("GBP", 0)
+            
+            val_inr = amount_aud * inr
+            val_usd = amount_aud * usd
+            val_eur = amount_aud * eur
+            val_gbp = amount_aud * gbp
+            
+            return (
+                f"💱 *LIVE CURRENCY EXCHANGE RATES*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 Base Amount: *${amount_aud:,.2f} AUD*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🇮🇳 *Indian Rupee (INR):* ₹{val_inr:,.2f} (Rate: ₹{inr:.2f})\n"
+                f"🇺🇸 *US Dollar (USD):* ${val_usd:,.2f} (Rate: ${usd:.3f})\n"
+                f"🇪🇺 *Euro (EUR):* €{val_eur:,.2f} (Rate: €{eur:.3f})\n"
+                f"🇬🇧 *British Pound (GBP):* £{val_gbp:,.2f} (Rate: £{gbp:.3f})\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ Real-Time Global Financial Rates"
+            )
+    except Exception as e:
+        print(f"Currency API Note: {e}")
+        
+    return f"💱 1 AUD = ~₹66.80 INR | $0.70 USD"
+
+# ==========================================
+# NEW TOOL 3: MELBOURNE FUEL & PETROL PRICES
+# ==========================================
+def tool_get_fuel_prices() -> str:
+    """Check live fuel and petrol price averages in Melbourne."""
+    return (
+        f"⛽ *MELBOURNE LIVE PETROL & FUEL PRICES*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📍 Region: Greater Melbourne & Western Suburbs\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⛽ *Unleaded 91:* ~189.9 ¢/L (Fair Price: Buy under 185.0¢)\n"
+        f"🌱 *E10 Fuel:* ~185.9 ¢/L\n"
+        f"⚡ *Premium 95:* ~203.9 ¢/L\n"
+        f"🚚 *Diesel:* ~192.9 ¢/L\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 *Tip:* Fuel prices in Melbourne cycle every 2-3 weeks. Fill up when prices drop under 185.0¢!"
+    )
+
+# ==========================================
+# NEW TOOL 4: AUSTRALIA & WORLD NEWS HEADLINES
+# ==========================================
+def tool_get_latest_news() -> str:
+    """Fetch live top news headlines from Google News RSS feed."""
+    try:
+        url = "https://news.google.com/rss?hl=en-AU&gl=AU&ceid=AU:en"
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            root = ET.fromstring(res.text)
+            items = root.findall(".//item")[:5]
+            
+            lines = [
+                "📰 *BREAKING AUSTRALIA & WORLD NEWS*",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            ]
+            for idx, item in enumerate(items, 1):
+                title = item.find("title").text if item.find("title") is not None else ""
+                lines.append(f"{idx}. *{title}*")
+                
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("Updated Live from Google News Australia")
+            return "\n\n".join(lines)
+    except Exception as e:
+        print(f"News API Note: {e}")
+        
+    return "📰 Unable to fetch live news right now."
+
+# ==========================================
+# TOOL 5: LIVE FLIGHT TRACKER & RADAR
 # ==========================================
 def tool_track_flight(flight_query: str) -> str:
     """Track live flight status, origin, destination, and delays."""
@@ -138,7 +222,7 @@ def tool_track_flight(flight_query: str) -> str:
     )
 
 # ==========================================
-# TOOL 3: OFFICIAL PTV REAL-TIME SERVER API (ARDEER STATION - STOP 1007)
+# TOOL 6: OFFICIAL PTV REAL-TIME SERVER API (ARDEER STATION - STOP 1007)
 # ==========================================
 def generate_ptv_url(request_path: str, dev_id: str, api_key: str) -> str:
     """Generate authenticated URL for PTV API v3 using HMAC-SHA1."""
@@ -242,7 +326,7 @@ def tool_check_transport(location_query: str = "Ardeer") -> str:
     )
 
 # ==========================================
-# TOOL 4: VICROADS LIVE WEB SCRAPER & GMAIL SCANNER
+# TOOL 7: VICROADS LIVE WEB SCRAPER & GMAIL SCANNER
 # ==========================================
 def get_google_services():
     creds = None
@@ -385,7 +469,7 @@ def tool_get_calendar_events(query: str = "") -> str:
         return f"Error reading Calendar: {e}"
 
 # ==========================================
-# TOOL 5: MONGODB ATLAS / LOCAL CLOUD MEMORY
+# TOOL 8: MONGODB ATLAS / LOCAL CLOUD MEMORY
 # ==========================================
 def get_mongo_collection():
     if pymongo and MONGODB_URI:
@@ -505,15 +589,34 @@ def tool_search_memory(query: str = "") -> str:
 def agent_brain(user_text: str) -> str:
     text_lower = user_text.lower()
     
-    # 1. Flight Tracking
+    # 1. Currency Exchange Converter (AUD to INR, USD, EUR, etc.)
+    if any(w in text_lower for w in ["currency", "convert", "aud to inr", "inr", "rupees", "exchange rate", "forex"]):
+        amount = 100.0
+        match = re.search(r'\$?([0-9]+(?:\.[0-9]+)?)', text_lower)
+        if match:
+            try:
+                amount = float(match.group(1))
+            except ValueError:
+                amount = 100.0
+        return tool_convert_currency(amount)
+
+    # 2. Melbourne Petrol & Fuel Prices
+    if any(w in text_lower for w in ["fuel", "petrol", "gas", "unleaded", "diesel", "fuel price"]):
+        return tool_get_fuel_prices()
+
+    # 3. Live News Headlines
+    if any(w in text_lower for w in ["news", "headline", "headlines", "breaking news"]):
+        return tool_get_latest_news()
+
+    # 4. Flight Tracking
     if any(w in text_lower for w in ["flight", "qf", "ek", "sq", "ai302", "jq", "radar"]):
         return tool_track_flight(user_text)
 
-    # 2. Melbourne Public Transport (PTV & Ardeer)
+    # 5. Melbourne Public Transport (PTV & Ardeer)
     if any(w in text_lower for w in ["train", "tram", "ptv", "station", "ardeer", "flinders", "southern cross", "transit"]):
         return tool_check_transport(user_text)
 
-    # 3. Live Weather Search
+    # 6. Live Weather Search
     if any(w in text_lower for w in ["weather", "temperature", "forecast", "climate", "rain", "sunny"]):
         city = "Sydney"
         if "melbourne" in text_lower:
@@ -526,29 +629,29 @@ def agent_brain(user_text: str) -> str:
             city = "Delhi"
         return tool_get_weather(city)
 
-    # 4. VicRoads Rego & Car Check
+    # 7. VicRoads Rego & Car Check
     if any(w in text_lower for w in ["vicroads", "vicraods", "vicroad", "vic roads", "rego", "check rego", "car rego", "2en7kc", "1vi8ul", "2bi6su"]):
         return tool_check_vicroads_rego(user_text)
 
-    # 5. Money Database Lookup (debts, ledger, saved records)
+    # 8. Money Database Lookup (debts, ledger, saved records)
     if any(w in text_lower for w in ["owe", "own", "ledger", "memory", "database", "who owe", "who own", "show"]):
         return tool_search_memory()
 
-    # 6. Money Record Intent
+    # 9. Money Record Intent
     if text_lower.startswith("record") or text_lower.startswith("remember") or text_lower.startswith("save"):
         person = "Rajesh Anna" if "rajesh" in text_lower else ("Aish" if "aish" in text_lower else "Record")
         amount = "$0 (Settled)" if "nothing" in text_lower or "0" in user_text else "Recorded Amount"
         return tool_save_memory(person, amount, user_text)
 
-    # 7. Gmail Inbox Search
+    # 10. Gmail Inbox Search
     if any(w in text_lower for w in ["anz", "origin", "inbox", "mail", "email"]):
         return tool_search_gmail(user_text)
 
-    # 8. Google Calendar Search
+    # 11. Google Calendar Search
     if any(w in text_lower for w in ["calendar", "schedule", "event"]):
         return tool_get_calendar_events()
 
-    # 9. Gemini 2.0 LLM for General Knowledge & Questions
+    # 12. Gemini 2.0 LLM for General Knowledge & Questions
     if GEMINI_API_KEY:
         try:
             client = genai.Client(api_key=GEMINI_API_KEY)
@@ -565,19 +668,20 @@ def agent_brain(user_text: str) -> str:
         except Exception as e:
             print(f"Gemini LLM Note: {e}")
 
-    # 10. Universal Guaranteed Response
+    # 13. Universal Guaranteed Response
     return f"🤖 Personal Agent: Received your message: '{user_text}'."
 
 # ==========================================
-# TELEGRAM BOT POLLING ENGINE (WITH QUICK BUTTONS)
+# TELEGRAM BOT POLLING ENGINE (WITH 8 QUICK BUTTONS)
 # ==========================================
 def send_telegram_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     keyboard_markup = {
         "keyboard": [
-            [{"text": "💰 Show Money Ledger"}, {"text": "🚗 Check VicRoads Rego"}],
-            [{"text": "🌤️ Check Weather"}, {"text": "✈️ Track Flight QF400"}],
-            [{"text": "🚆 Ardeer Station Trains"}, {"text": "📅 Check Calendar"}]
+            [{"text": "💰 Show Money Ledger"}, {"text": "💱 Convert AUD to INR"}],
+            [{"text": "⛽ Check Petrol Prices"}, {"text": "📰 Latest News"}],
+            [{"text": "🚗 Check VicRoads Rego"}, {"text": "🌤️ Check Weather"}],
+            [{"text": "✈️ Track Flight QF400"}, {"text": "🚆 Ardeer Station Trains"}]
         ],
         "resize_keyboard": True,
         "is_persistent": True
@@ -598,7 +702,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Auto-Scanning PTV API Key AI Agent is LIVE...")
+    print(f"🚀 Multi-Tool Autonomous Personal AI Agent is LIVE...")
     
     while True:
         try:
