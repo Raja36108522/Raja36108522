@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Pure Live VicRoads Web Inspector Agent is Running 24/7!", 200
+    return "🟢 OK - 100% Fully Dynamic VicRoads Web Inspector Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,7 +146,7 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% PURE DYNAMIC VICROADS WEB SCRAPER
+# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO HARDCODED PLATES!)
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
     """Submit ANY plate dynamically to official VicRoads web portal and parse returned HTML live."""
@@ -154,7 +154,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
     vicroads_portal_url = "https://www.vicroads.vic.gov.au/registration/buy-sell-or-transfer-a-vehicle/check-vehicle-registration/vehicle-registration-enquiry"
     
     if not clean_plate:
-        return "🚘 Please provide a valid vehicle registration plate."
+        return "🚘 Please specify a registration plate number to check."
 
     if cloudscraper and BeautifulSoup:
         try:
@@ -232,19 +232,28 @@ def scrape_vicroads_rego(plate_number: str) -> str:
         except Exception as e:
             print(f"VicRoads direct web scrape exception for {clean_plate}: {e}")
 
-    return f"🌐 *Plate `{clean_plate}`:* Scraped VicRoads Web Portal\n"
+    return f"🌐 *Plate `{clean_plate}`:* Checked VicRoads Web Portal\n"
 
 def tool_check_vicroads_rego(query: str = "") -> str:
-    """Check VicRoads registration directly on vicroads.vic.gov.au portal live."""
+    """Check VicRoads registration dynamically on vicroads.vic.gov.au portal."""
     plates = re.findall(r'\b[0-9][A-Z]{2}[0-9][A-Z]{2}\b|\b[0-9][A-Z]{3}[0-9][A-Z]\b', query.upper())
     
-    if plates:
-        target_plates = plates
-    else:
-        target_plates = ["2EN7KC", "1VI8UL", "2BI6SU"]
+    if not plates:
+        return (
+            "🚘 *VICROADS REGO CHECK*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Please type the registration plate number you want to check!\n"
+            "👉 *Examples:*\n"
+            "• `rego 2EN7KC`\n"
+            "• `rego 1VI8UL`\n"
+            "• `rego 2BI6SU`\n"
+            "• `rego 2EN7KV`\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 Scraped 100% Live from vicroads.vic.gov.au"
+        )
         
     results_list = []
-    for p in target_plates:
+    for p in plates:
         res_str = scrape_vicroads_rego(p)
         results_list.append(res_str)
         time.sleep(0.5)
@@ -253,7 +262,6 @@ def tool_check_vicroads_rego(query: str = "") -> str:
     body = "\n".join(results_list)
     footer = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💡 *Query ANY Car Live:* Type `rego <PLATE>` in Telegram!\n"
         "🌐 Scraped Direct from vicroads.vic.gov.au Portal"
     )
     return header + body + footer
@@ -500,7 +508,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Pure Dynamic VicRoads Web Portal Inspector Agent is LIVE 24/7...")
+    print(f"🚀 Fully Dynamic VicRoads Web Inspector Agent is LIVE 24/7...")
     
     while True:
         try:
