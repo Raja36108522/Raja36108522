@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Pure Generic VicRoads Web Inspector Agent is Running 24/7!", 200
+    return "🟢 OK - 100% Pure Dynamic VicRoads Web Inspector Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,7 +146,7 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO CAR ENTRIES!)
+# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ROBUST HTML NORMALIZER)
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
     """Submit ANY plate dynamically to official VicRoads web portal and parse returned HTML live."""
@@ -197,6 +197,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                     if post_res.status_code == 200:
                         res_soup = BeautifulSoup(post_res.text, 'html.parser')
                         text = res_soup.get_text(separator='\n')
+                        text = text.replace('\xa0', ' ')
                         lines = [l.strip() for l in text.split('\n') if l.strip()]
                         
                         status_expiry = ""
@@ -207,23 +208,26 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                         vin = ""
                         
                         for idx, l in enumerate(lines):
-                            if "Registration status & expiry date" in l and idx + 1 < len(lines):
-                                status_expiry = lines[idx + 1]
-                            elif any(w in l.lower() for w in ['current -', 'expired -', 'suspended -']) and not status_expiry:
+                            l_lower = l.lower()
+                            if any(k in l_lower for k in ['current -', 'expired -', 'suspended -', 'cancelled -']):
                                 status_expiry = l
-                            elif l == "Make" and idx + 1 < len(lines):
+                            elif ('registration status' in l_lower or 'expiry date' in l_lower) and idx + 1 < len(lines):
+                                if not status_expiry:
+                                    status_expiry = lines[idx + 1]
+                            elif l_lower == "make" and idx + 1 < len(lines):
                                 make = lines[idx + 1]
-                            elif l == "Year" and idx + 1 < len(lines):
+                            elif l_lower == "year" and idx + 1 < len(lines):
                                 year = lines[idx + 1]
-                            elif l == "Body type" and idx + 1 < len(lines):
+                            elif l_lower == "body type" and idx + 1 < len(lines):
                                 body_type = lines[idx + 1]
-                            elif l == "Colour" and idx + 1 < len(lines):
+                            elif l_lower == "colour" and idx + 1 < len(lines):
                                 colour = lines[idx + 1]
-                            elif l == "VIN/Chassis" and idx + 1 < len(lines):
-                                vin = lines[idx + 1]
+                            elif ("vin" in l_lower or "chassis" in l_lower) and idx + 1 < len(lines):
+                                if not vin and lines[idx + 1].lower() != 'number':
+                                    vin = lines[idx + 1]
 
                         if status_expiry or make:
-                            vin_str = f"\n  • *VIN:* `{vin}`" if vin else ""
+                            vin_str = f"\n  • *VIN:* `{vin}`" if (vin and len(vin) > 5) else ""
                             return (
                                 f"🏎️ *Plate `{clean_plate}`:*\n"
                                 f"  • *Status & Expiry:* *{status_expiry}*\n"
@@ -232,7 +236,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
         except Exception as e:
             print(f"VicRoads direct web scrape exception for {clean_plate}: {e}")
 
-    return f"🌐 *Plate `{clean_plate}`:* Checked VicRoads Web Portal\n"
+    return f"🌐 *Plate `{clean_plate}`:* Scraped VicRoads Web Portal\n"
 
 def tool_check_vicroads_rego(query: str = "") -> str:
     """Check VicRoads registration dynamically on vicroads.vic.gov.au portal."""
@@ -506,7 +510,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Fully Generic VicRoads Web Inspector Agent is LIVE 24/7...")
+    print(f"🚀 Fully Dynamic VicRoads Web Inspector Agent is LIVE 24/7...")
     
     while True:
         try:
