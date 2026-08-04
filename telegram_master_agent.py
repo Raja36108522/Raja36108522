@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Optimized 100% Precision AI Gmail Push Agent is Running 24/7!", 200
+    return "🟢 OK - Live VicRoads Web Portal & AI Gmail Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,10 +146,122 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# HIGH-PRECISION EMAIL CLASSIFIER (PREVENTS 429 & MARKETING PUSHES)
+# TOOL 1: OFFICIAL VICROADS LIVE WEB SCRAPER
+# ==========================================
+def scrape_vicroads_rego(plate_number: str = "2EN7KC") -> str:
+    """Submit rego plate to official VicRoads portal using CloudScraper and return live details."""
+    clean_plate = re.sub(r'[^A-Za-z0-9]', '', plate_number).upper() or "2EN7KC"
+    vicroads_portal_url = "https://www.vicroads.vic.gov.au/registration/buy-sell-or-transfer-a-vehicle/check-vehicle-registration/vehicle-registration-enquiry"
+    
+    if not cloudscraper or not BeautifulSoup:
+        return f"🚘 VicRoads Check for {clean_plate}: Portal link - {vicroads_portal_url}"
+        
+    try:
+        scraper = cloudscraper.create_scraper()
+        res = scraper.get(vicroads_portal_url, timeout=10)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            form = soup.find_all('form')[-1]
+            action = form.get('action')
+            if not action.startswith('http'):
+                action = 'https://www.vicroads.vic.gov.au' + action
+
+            form_data = {}
+            for inp in form.find_all('input'):
+                name = inp.get('name')
+                val = inp.get('value', '')
+                if name:
+                    form_data[name] = val
+
+            # Fill in VicRoads form fields
+            form_data['FormApplicationItem.Forms[0].Sections[0].InputFields[0].Value'] = 'car'
+            form_data['FormApplicationItem.Forms[0].Sections[0].InputFields[1].Value'] = 'registration'
+            form_data['FormApplicationItem.Forms[0].Sections[0].InputFields[2].Value'] = clean_plate
+
+            post_res = scraper.post(action, data=form_data, headers={'Referer': vicroads_portal_url}, timeout=10)
+            if post_res.status_code == 200:
+                res_soup = BeautifulSoup(post_res.text, 'html.parser')
+                text = res_soup.get_text(separator='\n')
+                lines = [l.strip() for l in text.split('\n') if l.strip()]
+                
+                # Parse scraped fields
+                status_expiry = ""
+                make = ""
+                year = ""
+                body_type = ""
+                colour = ""
+                vin = ""
+                
+                for idx, line in enumerate(lines):
+                    if "Registration status & expiry date" in line and idx + 1 < len(lines):
+                        status_expiry = lines[idx + 1]
+                    elif line == "Make" and idx + 1 < len(lines):
+                        make = lines[idx + 1]
+                    elif line == "Year" and idx + 1 < len(lines):
+                        year = lines[idx + 1]
+                    elif line == "Body type" and idx + 1 < len(lines):
+                        body_type = lines[idx + 1]
+                    elif line == "Colour" and idx + 1 < len(lines):
+                        colour = lines[idx + 1]
+                    elif line == "VIN/Chassis" and idx + 1 < len(lines):
+                        vin = lines[idx + 1]
+
+                if status_expiry:
+                    return (
+                        f"🚘 *OFFICIAL VICROADS REGO SEARCH RESULT*\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🔢 *Plate Number:* `{clean_plate}`\n"
+                        f"📅 *Status & Expiry:* *{status_expiry}*\n"
+                        f"🏎️ *Vehicle Make:* {make} ({year})\n"
+                        f"🚙 *Body & Colour:* {body_type} | {colour}\n"
+                        f"🔑 *VIN Number:* `{vin}`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🌐 Scraped Live from VicRoads Official Register"
+                    )
+    except Exception as e:
+        print(f"VicRoads live scrape note: {e}")
+
+    return (
+        f"🚘 *VICROADS REGISTRATION CHECK: {clean_plate}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 *Official VicRoads Portal Link:*\n"
+        f"{vicroads_portal_url}"
+    )
+
+def tool_check_vicroads_rego(query: str = "") -> str:
+    """Check VicRoads registration using live web automation + Gmail notices."""
+    plates = re.findall(r'\b[0-9][A-Z]{2}[0-9][A-Z]{2}\b|\b[0-9][A-Z]{3}[0-9][A-Z]\b', query.upper())
+    target_plate = plates[0] if plates else "2EN7KC"
+    
+    # Run Live VicRoads Web Scraper
+    live_result = scrape_vicroads_rego(target_plate)
+    
+    # Combine with Gmail inbox records
+    gmail, _ = get_google_services()
+    email_records = ""
+    if gmail:
+        try:
+            results = gmail.users().messages().list(userId='me', q='vicroads OR rego', maxResults=3).execute()
+            messages = results.get('messages', [])
+            if messages:
+                items = []
+                for msg_meta in messages:
+                    msg = gmail.users().messages().get(userId='me', id=msg_meta['id'], format='full').execute()
+                    headers = msg['payload']['headers']
+                    subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
+                    snippet = msg.get('snippet', '')
+                    items.append(f"• *{subject}*\n  {snippet[:100]}...")
+                email_records = "\n\n📩 *INBOX REGISTRATION NOTICES:*\n" + "\n\n".join(items)
+        except Exception as e:
+            print(f"Gmail rego note: {e}")
+            
+    return live_result + email_records
+
+# ==========================================
+# HIGH-PRECISION EMAIL CLASSIFIER
 # ==========================================
 def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
-    """Classify email with 100% precision using strict local filtering + rate-limit protected Gemini AI."""
+    """Classify email with 100% precision using strict local filtering + Gemini AI."""
     combined = (sender + " " + subject + " " + snippet).lower()
     
     # 1. STRICT UNIMPORTANT / MARKETING FILTER (Instant Local Drop - No API Call!)
@@ -159,7 +271,6 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
         "best friend", "innovations", "special price", "clearance", "exclusive offer"
     ]
     if any(u in combined for u in unimportant_triggers):
-        print(f"🛑 Local Rule Filter: Suppressed marketing email '{subject}'")
         return {"is_important": False, "category": "🟢 UNIMPORTANT / MARKETING"}
 
     # 2. STRICT IMPORTANT FILTER (Instant Local Pass - No API Call!)
@@ -169,10 +280,9 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
         "account statement", "v-line", "ptv"
     ]
     if any(k in combined for k in important_triggers):
-        print(f"⚡ Local Rule Match: Approved important email '{subject}'")
         return {"is_important": True, "category": "🚨 IMPORTANT / ACTION REQUIRED"}
 
-    # 3. Gemini 2.0 AI Fallback for Ambiguous Emails (Rate-Limit Protected)
+    # 3. Gemini 2.0 AI Fallback
     if GEMINI_API_KEY:
         try:
             client = genai.Client(api_key=GEMINI_API_KEY)
@@ -196,7 +306,6 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
         except Exception as e:
             print(f"Gemini API rate limit or error note: {e}")
 
-    # Default fallback for unclassified emails: FALSE to avoid spamming
     return {"is_important": False, "category": "🟢 UNIMPORTANT / UNCLASSIFIED"}
 
 # ==========================================
@@ -204,7 +313,7 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
 # ==========================================
 def autonomous_gmail_push_loop():
     """Runs continuously on Render: Scans UNREAD Gmails, filters out spam, and pushes IMPORTANT emails to Telegram!"""
-    print("🚀 Starting 100% Precision Autonomous Gmail Background Push Engine...")
+    print("🚀 Starting Live VicRoads & Precision Autonomous Gmail Background Push Engine...")
     
     # Pre-seed existing email IDs on startup to avoid pushing old emails
     gmail, _ = get_google_services()
@@ -224,7 +333,6 @@ def autonomous_gmail_push_loop():
             owner_chat_id = load_chat_id()
             
             if gmail and owner_chat_id:
-                # Query ONLY unread emails to conserve rate limits
                 results = gmail.users().messages().list(userId='me', q='is:unread', maxResults=5).execute()
                 messages = results.get('messages', [])
                 
@@ -239,14 +347,11 @@ def autonomous_gmail_push_loop():
                     sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), '(Unknown)')
                     snippet = msg.get('snippet', '')
                     
-                    # Mark email as evaluated in memory
                     processed_email_ids.add(msg_id)
                     save_processed_ids()
                     
-                    # Run High-Precision AI Classification
                     classification = classify_email_with_ai(sender, subject, snippet)
                     
-                    # PUSH TO TELEGRAM AUTOMATICALLY IF IMPORTANT!
                     if classification["is_important"]:
                         alert_text = (
                             f"📬 *NEW IMPORTANT EMAIL RECEIVED!*\n"
@@ -263,37 +368,16 @@ def autonomous_gmail_push_loop():
                     else:
                         print(f"🙈 Filtered out marketing/spam email: '{subject}'")
                         
-                    # Delay 1.5 seconds between email evaluations to stay strictly within rate limits
                     time.sleep(1.5)
                         
         except Exception as e:
             print(f"Autonomous Email Push Loop Exception: {e}")
             
-        time.sleep(60) # Poll every 60 seconds
+        time.sleep(60)
 
 # ==========================================
 # TOOL MANIFEST FOR MANUAL USER TELEGRAM COMMANDS
 # ==========================================
-def tool_check_vicroads_rego(query: str = "") -> str:
-    """Check VicRoads registration records in inbox."""
-    gmail, _ = get_google_services()
-    if gmail:
-        try:
-            results = gmail.users().messages().list(userId='me', q='vicroads OR rego', maxResults=5).execute()
-            messages = results.get('messages', [])
-            if messages:
-                rego_records = []
-                for msg_meta in messages:
-                    msg = gmail.users().messages().get(userId='me', id=msg_meta['id'], format='full').execute()
-                    headers = msg['payload']['headers']
-                    subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
-                    snippet = msg.get('snippet', '')
-                    rego_records.append(f"• *{subject}*\n  Snippet: {snippet[:110]}...")
-                return "🚘 *[VICROADS REGISTRATION NOTICES]*\n\n" + "\n\n".join(rego_records)
-        except Exception as e:
-            print(f"Gmail VicRoads note: {e}")
-    return "🚘 VicRoads check: No recent registration notices in inbox."
-
 def tool_search_gmail(query: str) -> str:
     """Search user's Gmail inbox for specific messages."""
     gmail, _ = get_google_services()
@@ -356,7 +440,7 @@ def tool_get_calendar_events(query: str = "") -> str:
 def agent_brain(user_text: str) -> str:
     text_lower = user_text.lower()
     
-    if any(w in text_lower for w in ["vicroads", "rego"]):
+    if any(w in text_lower for w in ["vicroads", "rego", "car"]):
         return tool_check_vicroads_rego(user_text)
 
     if any(w in text_lower for w in ["email", "inbox", "mail"]):
@@ -395,7 +479,7 @@ def send_telegram_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     keyboard_markup = {
         "keyboard": [
-            [{"text": "📩 Check Inbox"}, {"text": "🚗 Check VicRoads Rego"}],
+            [{"text": "🚗 Check VicRoads Rego"}, {"text": "📩 Check Inbox"}],
             [{"text": "🚆 Ardeer Station Trains"}, {"text": "📅 Check Calendar"}]
         ],
         "resize_keyboard": True,
@@ -419,7 +503,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 100% Precision Autonomous AI Gmail Push Agent is LIVE 24/7...")
+    print(f"🚀 Live VicRoads Web Automation Agent is LIVE 24/7...")
     
     while True:
         try:
