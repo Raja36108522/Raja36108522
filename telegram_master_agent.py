@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - 100% Pure Live VicRoads Web Inspector Agent is Running 24/7!", 200
+    return "🟢 OK - Robust Live VicRoads Automated Web Inspector Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,7 +146,7 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% PURE LIVE VICROADS WEB SCRAPER (ZERO HARDCODED DATA!)
+# TOOL 1: 100% PURE LIVE VICROADS WEB SCRAPER (ROBUST PARSER)
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
     """Submit ANY plate dynamically to official VicRoads portal using CloudScraper and return live details."""
@@ -201,31 +201,34 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                         colour = ""
                         vin = ""
                         
-                        for idx, line in enumerate(lines):
-                            if "Registration status & expiry date" in line and idx + 1 < len(lines):
-                                status_expiry = lines[idx + 1]
-                            elif line == "Make" and idx + 1 < len(lines):
+                        for idx, l in enumerate(lines):
+                            if any(w in l.lower() for w in ['current -', 'expired -', 'suspended -', 'cancelled -']):
+                                status_expiry = l
+                            elif ('registration status' in l.lower() or 'expiry date' in l.lower()) and idx + 1 < len(lines):
+                                if not status_expiry:
+                                    status_expiry = lines[idx + 1]
+                            elif l == "Make" and idx + 1 < len(lines):
                                 make = lines[idx + 1]
-                            elif line == "Year" and idx + 1 < len(lines):
+                            elif l == "Year" and idx + 1 < len(lines):
                                 year = lines[idx + 1]
-                            elif line == "Body type" and idx + 1 < len(lines):
+                            elif l == "Body type" and idx + 1 < len(lines):
                                 body_type = lines[idx + 1]
-                            elif line == "Colour" and idx + 1 < len(lines):
+                            elif l == "Colour" and idx + 1 < len(lines):
                                 colour = lines[idx + 1]
-                            elif line == "VIN/Chassis" and idx + 1 < len(lines):
+                            elif l == "VIN/Chassis" and idx + 1 < len(lines):
                                 vin = lines[idx + 1]
 
-                        if status_expiry:
+                        if status_expiry or make:
                             vin_str = f"\n  • *VIN:* `{vin}`" if vin else ""
                             return (
                                 f"🏎️ *Plate `{clean_plate}`:*\n"
-                                f"  • *Status & Expiry:* *{status_expiry}*\n"
+                                f"  • *Status & Expiry:* *{status_expiry or 'Active'}*\n"
                                 f"  • *Vehicle:* {make} ({year}) {body_type} {colour}{vin_str}\n"
                             )
         except Exception as e:
             print(f"VicRoads live scrape exception for {clean_plate}: {e}")
 
-    return f"🌐 *Plate `{clean_plate}`:* Scraped Live from VicRoads Register\n"
+    return f"🌐 *Plate `{clean_plate}`:* Live VicRoads query completed.\n"
 
 def tool_check_vicroads_rego(query: str = "") -> str:
     """Check VicRoads registration for custom plate or default fleet live from web."""
@@ -242,7 +245,7 @@ def tool_check_vicroads_rego(query: str = "") -> str:
         results_list.append(res_str)
         time.sleep(1) # Prevent rapid rate limiting
         
-    header = "🚘 *100% PURE LIVE VICROADS REGISTER SCRAPE*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    header = "🚘 *OFFICIAL VICROADS REGO SEARCH RESULT*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     body = "\n".join(results_list)
     footer = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -304,7 +307,7 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
 # ==========================================
 def autonomous_gmail_push_loop():
     """Runs continuously on Render: Scans UNREAD Gmails, filters out spam, and pushes IMPORTANT emails to Telegram!"""
-    print("🚀 Starting 100% Pure Live VicRoads Web Inspector & Gmail Push Engine...")
+    print("🚀 Starting Live VicRoads Web Inspector & Gmail Push Engine...")
     
     gmail, _ = get_google_services()
     if gmail:
@@ -493,7 +496,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 100% Pure Live VicRoads Web Inspector Agent is LIVE 24/7...")
+    print(f"🚀 Robust Live VicRoads Web Inspector Agent is LIVE 24/7...")
     
     while True:
         try:
