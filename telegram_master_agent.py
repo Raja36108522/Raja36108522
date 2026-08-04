@@ -7,10 +7,7 @@ import re
 import base64
 import datetime
 import threading
-import hmac
-import hashlib
 import requests
-import xml.etree.ElementTree as ET
 from flask import Flask
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -44,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Multi-Tool Telegram Autonomous AI Agent is Running 24/7!", 200
+    return "🟢 OK - Autonomous AI Gmail Push Classifier Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -65,12 +62,9 @@ TELEGRAM_BOT_TOKEN = raw_tok if (raw_tok and len(raw_tok) > 10) else "8894589298
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
 MONGODB_URI = os.environ.get("MONGODB_URI", "")
-PTV_DEV_ID = os.environ.get("PTV_DEV_ID", "")
-PTV_API_KEY = os.environ.get("PTV_API_KEY", "")
+OWNER_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "") # Auto-stored on first interaction
 
 MEMORY_DB_FILE = "/tmp/user_memory_ledger.json" if os.path.exists("/tmp") else "user_memory_ledger.json"
-
-DEFAULT_MEMORY_BASE64 = "ewogICJkZWJ0c19hbmRfbG9hbnMiOiBbCiAgICB7CiAgICAgICJwZXJzb24iOiAiQWlzaCIsCiAgICAgICJhbW91bnQiOiAiJDIzNi41MSArICQyNDMuNjIgKFRvdGFsOiAkNDgwLjEzKSIsCiAgICAgICJkZXRhaWxzIjogIkNhciByZWdvIHBheW1lbnRzIGZvciBoZXIgY2FyIiwKICAgICAgImRhdGUiOiAiMjAyNi0wOC0wMiAyMzowOSIKICAgIH0KICBdLAogICJub3RlcyI6IFtdCn0="
 
 if TOKEN_JSON_BASE64:
     try:
@@ -80,253 +74,26 @@ if TOKEN_JSON_BASE64:
     except Exception as e:
         print(f"Token restore note: {e}")
 
-if not os.path.exists(MEMORY_DB_FILE):
+# Track processed emails to prevent duplicate pushes
+PROCESSED_EMAILS_FILE = "/tmp/processed_emails.json" if os.path.exists("/tmp") else "processed_emails.json"
+processed_email_ids = set()
+
+if os.path.exists(PROCESSED_EMAILS_FILE):
     try:
-        with open(MEMORY_DB_FILE, 'wb') as f:
-            f.write(base64.b64decode(DEFAULT_MEMORY_BASE64))
-        print("✅ Restored database from default memory!")
-    except Exception as e:
-        print(f"DB restore note: {e}")
+        with open(PROCESSED_EMAILS_FILE, 'r') as f:
+            processed_email_ids = set(json.load(f))
+    except Exception:
+        processed_email_ids = set()
 
-# ==========================================
-# TOOL 1: REAL-TIME WEATHER API
-# ==========================================
-def tool_get_weather(city: str = "Sydney") -> str:
-    """Fetch live real-time weather conditions for city."""
-    clean_city = city.strip() if city else "Sydney"
+def save_processed_ids():
     try:
-        url = f"https://wttr.in/{clean_city}?format=3"
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200 and res.text:
-            return f"🌤️ LIVE WEATHER REPORT:\n📍 {res.text.strip()}"
+        with open(PROCESSED_EMAILS_FILE, 'w') as f:
+            json.dump(list(processed_email_ids), f)
     except Exception as e:
-        print(f"Weather API Note: {e}")
-    return f"🌤️ Live Weather for {clean_city}: Sunny, 18°C."
+        print(f"Save processed ids note: {e}")
 
 # ==========================================
-# NEW TOOL 2: LIVE CURRENCY CONVERTER (AUD -> INR, USD, EUR, GBP)
-# ==========================================
-def tool_convert_currency(amount_aud: float = 100.0) -> str:
-    """Fetch live real-time exchange rates for AUD to INR, USD, EUR, GBP."""
-    try:
-        url = "https://open.er-api.com/v6/latest/AUD"
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
-            rates = res.json().get("rates", {})
-            inr = rates.get("INR", 0)
-            usd = rates.get("USD", 0)
-            eur = rates.get("EUR", 0)
-            gbp = rates.get("GBP", 0)
-            
-            val_inr = amount_aud * inr
-            val_usd = amount_aud * usd
-            val_eur = amount_aud * eur
-            val_gbp = amount_aud * gbp
-            
-            return (
-                f"💱 *LIVE CURRENCY EXCHANGE RATES*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"💵 Base Amount: *${amount_aud:,.2f} AUD*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🇮🇳 *Indian Rupee (INR):* ₹{val_inr:,.2f} (Rate: ₹{inr:.2f})\n"
-                f"🇺🇸 *US Dollar (USD):* ${val_usd:,.2f} (Rate: ${usd:.3f})\n"
-                f"🇪🇺 *Euro (EUR):* €{val_eur:,.2f} (Rate: €{eur:.3f})\n"
-                f"🇬🇧 *British Pound (GBP):* £{val_gbp:,.2f} (Rate: £{gbp:.3f})\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"✅ Real-Time Global Financial Rates"
-            )
-    except Exception as e:
-        print(f"Currency API Note: {e}")
-        
-    return f"💱 1 AUD = ~₹66.80 INR | $0.70 USD"
-
-# ==========================================
-# NEW TOOL 3: MELBOURNE FUEL & PETROL PRICES
-# ==========================================
-def tool_get_fuel_prices() -> str:
-    """Check live fuel and petrol price averages in Melbourne."""
-    return (
-        f"⛽ *MELBOURNE LIVE PETROL & FUEL PRICES*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 Region: Greater Melbourne & Western Suburbs\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⛽ *Unleaded 91:* ~189.9 ¢/L (Fair Price: Buy under 185.0¢)\n"
-        f"🌱 *E10 Fuel:* ~185.9 ¢/L\n"
-        f"⚡ *Premium 95:* ~203.9 ¢/L\n"
-        f"🚚 *Diesel:* ~192.9 ¢/L\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 *Tip:* Fuel prices in Melbourne cycle every 2-3 weeks. Fill up when prices drop under 185.0¢!"
-    )
-
-# ==========================================
-# NEW TOOL 4: AUSTRALIA & WORLD NEWS HEADLINES
-# ==========================================
-def tool_get_latest_news() -> str:
-    """Fetch live top news headlines from Google News RSS feed."""
-    try:
-        url = "https://news.google.com/rss?hl=en-AU&gl=AU&ceid=AU:en"
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
-            root = ET.fromstring(res.text)
-            items = root.findall(".//item")[:5]
-            
-            lines = [
-                "📰 *BREAKING AUSTRALIA & WORLD NEWS*",
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ]
-            for idx, item in enumerate(items, 1):
-                title = item.find("title").text if item.find("title") is not None else ""
-                lines.append(f"{idx}. *{title}*")
-                
-            lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            lines.append("Updated Live from Google News Australia")
-            return "\n\n".join(lines)
-    except Exception as e:
-        print(f"News API Note: {e}")
-        
-    return "📰 Unable to fetch live news right now."
-
-# ==========================================
-# TOOL 5: LIVE FLIGHT TRACKER & RADAR
-# ==========================================
-def tool_track_flight(flight_query: str) -> str:
-    """Track live flight status, origin, destination, and delays."""
-    clean_code = flight_query.upper().strip()
-    match = re.search(r'\b[A-Z0-9]{2,3}\s?[0-9]{1,4}\b', clean_code)
-    flight_num = match.group(0) if match else "QF400"
-    
-    try:
-        res = requests.get("https://opensky-network.org/api/states/all", timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            states = data.get("states", [])
-            active_count = len(states)
-            return (
-                f"✈️ *LIVE FLIGHT TRACKER: {flight_num}*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📡 Radar Status: Active ({active_count:,} aircraft currently tracked live)\n"
-                f"🛫 Flight Code: {flight_num}\n"
-                f"⏱️ Status: On Time / Active Schedule\n"
-                f"🔗 Live Radar View: https://www.flightradar24.com/data/flights/{flight_num.replace(' ', '')}\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            )
-    except Exception as e:
-        print(f"Flight Tracker Note: {e}")
-        
-    return (
-        f"✈️ *FLIGHT STATUS: {flight_num}*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏱️ Status: Scheduled / On Time\n"
-        f"🔗 Track Live: https://www.flightradar24.com/data/flights/{flight_num.replace(' ', '')}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-
-# ==========================================
-# TOOL 6: OFFICIAL PTV REAL-TIME SERVER API (ARDEER STATION - STOP 1007)
-# ==========================================
-def generate_ptv_url(request_path: str, dev_id: str, api_key: str) -> str:
-    """Generate authenticated URL for PTV API v3 using HMAC-SHA1."""
-    raw = f"{request_path}?devid={dev_id}"
-    hashed = hmac.new(api_key.encode('utf-8'), raw.encode('utf-8'), hashlib.sha1)
-    signature = hashed.hexdigest().upper()
-    return f"https://timetableapi.ptv.vic.gov.au{raw}&signature={signature}"
-
-def check_ptv_inbox_key():
-    """Auto-scan Gmail inbox for PTV API key reply."""
-    gmail, _ = get_google_services()
-    if gmail:
-        try:
-            results = gmail.users().messages().list(userId='me', q='ptv AND key', maxResults=3).execute()
-            messages = results.get('messages', [])
-            if messages:
-                for msg_meta in messages:
-                    msg = gmail.users().messages().get(userId='me', id=msg_meta['id'], format='full').execute()
-                    snippet = msg.get('snippet', '')
-                    dev_ids = re.findall(r'\b\d{7}\b', snippet)
-                    api_keys = re.findall(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', snippet, re.I)
-                    if dev_ids and api_keys:
-                        return dev_ids[0], api_keys[0]
-        except Exception as e:
-            print(f"PTV Inbox Scan Note: {e}")
-    return None, None
-
-def tool_check_transport(location_query: str = "Ardeer") -> str:
-    """Fetch 100% official live departures directly from PTV Real-Time API for Ardeer Railway Station."""
-    ptv_ardeer_url = "https://www.ptv.vic.gov.au/stop/1007/ardeer-station/"
-    
-    if ZoneInfo:
-        melb_now = datetime.datetime.now(ZoneInfo('Australia/Melbourne'))
-    else:
-        melb_now = datetime.datetime.utcnow() + datetime.timedelta(hours=10)
-        
-    now_str = melb_now.strftime("%I:%M %p")
-
-    dev_id = PTV_DEV_ID
-    api_key = PTV_API_KEY
-    
-    # Auto-check inbox if keys not present in ENV
-    if not dev_id or not api_key:
-        auto_dev, auto_key = check_ptv_inbox_key()
-        if auto_dev and auto_key:
-            dev_id = auto_dev
-            api_key = auto_key
-            print(f"✅ Auto-detected PTV API Key from Inbox! DevID: {dev_id}")
-
-    # If PTV_DEV_ID and PTV_API_KEY are active
-    if dev_id and api_key:
-        try:
-            req_path = "/v3/departures/route_type/3/stop/1007"
-            api_url = generate_ptv_url(req_path, dev_id, api_key)
-            res = requests.get(api_url, timeout=5)
-            
-            if res.status_code == 200:
-                data = res.json()
-                departures = data.get("departures", [])
-                
-                if departures:
-                    lines = [
-                        f"🚆 *OFFICIAL PTV LIVE SERVER DEPARTURES*",
-                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                        f"📍 Station: Ardeer Railway Station (V/Line Ballarat & Melton)",
-                        f"🕒 Live Time: *{now_str}*",
-                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    ]
-                    
-                    for dep in departures[:6]:
-                        sched_time_str = dep.get("scheduled_departure_utc")
-                        if sched_time_str:
-                            utc_dt = datetime.datetime.fromisoformat(sched_time_str.replace("Z", "+00:00"))
-                            if ZoneInfo:
-                                local_dt = utc_dt.astimezone(ZoneInfo('Australia/Melbourne'))
-                            else:
-                                local_dt = utc_dt + datetime.timedelta(hours=10)
-                            dep_time_formatted = local_dt.strftime("%I:%M %p")
-                            platform = dep.get("platform_number", "1/2")
-                            lines.append(f"• 🚆 Departure: *{dep_time_formatted}* | Platform {platform}")
-                            
-                    lines.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"🔗 *Live Transport Victoria Board:*\n{ptv_ardeer_url}")
-                    lines.append("✅ Pulled directly from PTV Real-Time Server")
-                    return "\n".join(lines)
-        except Exception as ptv_err:
-            print(f"PTV API Execution Note: {ptv_err}")
-
-    # Direct Official Live Portal View & Status Notice
-    return (
-        f"🚆 *MELBOURNE PTV REAL-TIME DEPARTURE BOARD*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 Station: Ardeer Railway Station (V/Line Ballarat & Melton Line)\n"
-        f"🕒 Live Time: *{now_str}*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📩 *PTV Key Request Status:*\n"
-        f"Request email sent to `APIKeyRequest@ptv.vic.gov.au`.\n"
-        f"Your bot will auto-detect the reply from PTV in your inbox!\n\n"
-        f"🔗 *Tap below for Live PTV Real-Time GPS Departure Screen:*\n"
-        f"{ptv_ardeer_url}"
-    )
-
-# ==========================================
-# TOOL 7: VICROADS LIVE WEB SCRAPER & GMAIL SCANNER
+# GOOGLE GMAIL & CALENDAR AUTHENTICATION
 # ==========================================
 def get_google_services():
     creds = None
@@ -361,22 +128,118 @@ def get_google_services():
         
     return None, None
 
-def tool_check_vicroads_rego(query: str = "") -> str:
-    """Check VicRoads vehicle registration due dates using CloudScraper Web Automation and Gmail API."""
-    gmail, _ = get_google_services()
-    vicroads_portal_url = "https://www.vicroads.vic.gov.au/registration/buy-sell-or-transfer-a-vehicle/check-vehicle-registration/vehicle-registration-enquiry/"
+# ==========================================
+# AI EMAIL CLASSIFIER (IMPORTANT vs UNIMPORTANT)
+# ==========================================
+def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
+    """Use Gemini 2.0 AI to classify email as IMPORTANT or UNIMPORTANT."""
+    # Strict rule triggers for immediate importance
+    combined = (sender + " " + subject + " " + snippet).lower()
+    important_keywords = ["vicroads", "rego", "anz", "bank", "bill", "invoice", "visa", "immigration", "origin", "urgent", "payment due", "receipt"]
     
-    web_scraper_status = "🌐 VicRoads Live Web Portal Connected"
-    if cloudscraper:
+    if any(k in combined for k in important_keywords):
+        return {
+            "is_important": True,
+            "category": "🚨 IMPORTANT / ACTION REQUIRED",
+            "summary": f"Sender: {sender}\nSubject: {subject}\nSnippet: {snippet[:150]}"
+        }
+        
+    if GEMINI_API_KEY:
         try:
-            scraper = cloudscraper.create_scraper()
-            res = scraper.get(vicroads_portal_url, timeout=5)
-            if res.status_code == 200:
-                web_scraper_status = "🌐 VicRoads Live Web Portal Verified Active (HTTP 200)"
-        except Exception as ws_err:
-            print(f"Web scraper note: {ws_err}")
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            prompt = (
+                f"Classify this email:\nSender: {sender}\nSubject: {subject}\nSnippet: {snippet}\n\n"
+                f"Is this email IMPORTANT (e.g. bills, banking, personal messages, official notices, work, flight, visa) "
+                f"or UNIMPORTANT (e.g. promotional discounts, newsletters, spam, marketing)?\n"
+                f"Reply in JSON format: {{\"is_important\": true/false, \"reason\": \"brief explanation\"}}"
+            )
+            res = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1
+                )
+            )
+            if res.text:
+                result = json.loads(res.text)
+                is_imp = result.get("is_important", False)
+                return {
+                    "is_important": is_imp,
+                    "category": "🚨 IMPORTANT EMAIL ALERT" if is_imp else "🟢 UNIMPORTANT / MARKETING",
+                    "summary": f"Sender: {sender}\nSubject: {subject}\nSnippet: {snippet[:150]}"
+                }
+        except Exception as e:
+            print(f"Gemini email classifier note: {e}")
+
+    # Fallback default: classify unknown newsletters as unimportant
+    is_imp = not any(w in combined for w in ["unsubscribe", "sale", "off", "discount", "newsletter", "deal"])
+    return {
+        "is_important": is_imp,
+        "category": "🚨 IMPORTANT EMAIL ALERT" if is_imp else "🟢 UNIMPORTANT / MARKETING",
+        "summary": f"Sender: {sender}\nSubject: {subject}\nSnippet: {snippet[:150]}"
+    }
+
+# ==========================================
+# AUTONOMOUS BACKGROUND EMAIL PUSH ENGINE
+# ==========================================
+def autonomous_gmail_push_loop():
+    """Runs every 2 minutes on Render: Scans Gmail, classifies with AI, and pushes IMPORTANT emails to Telegram!"""
+    print("🚀 Starting Autonomous Gmail Background Push Engine...")
+    
+    while True:
+        try:
+            gmail, _ = get_google_services()
+            if gmail and OWNER_CHAT_ID:
+                results = gmail.users().messages().list(userId='me', q='is:unread', maxResults=10).execute()
+                messages = results.get('messages', [])
+                
+                for msg_meta in messages:
+                    msg_id = msg_meta['id']
+                    if msg_id in processed_email_ids:
+                        continue
+                        
+                    msg = gmail.users().messages().get(userId='me', id=msg_id, format='full').execute()
+                    headers = msg.get('payload', {}).get('headers', [])
+                    subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '(No Subject)')
+                    sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), '(Unknown)')
+                    snippet = msg.get('snippet', '')
+                    
+                    # Run AI Classification
+                    classification = classify_email_with_ai(sender, subject, snippet)
+                    
+                    # Mark email as processed in database
+                    processed_email_ids.add(msg_id)
+                    save_processed_ids()
+                    
+                    # PUSH TO TELEGRAM AUTOMATICALLY IF IMPORTANT!
+                    if classification["is_important"]:
+                        alert_text = (
+                            f"📬 *NEW IMPORTANT EMAIL RECEIVED!*\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"👤 *From:* {html.escape(sender)}\n"
+                            f"📌 *Subject:* {html.escape(subject)}\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📝 *Summary:* {html.escape(snippet[:200])}...\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"⚡ Pushed automatically by your AI Personal Agent!"
+                        )
+                        send_telegram_message(OWNER_CHAT_ID, alert_text)
+                        print(f"✅ AUTOMATICALLY PUSHED IMPORTANT EMAIL TO TELEGRAM: '{subject}'")
+                    else:
+                        print(f"🙈 Filtered out unimportant email: '{subject}'")
+                        
+        except Exception as e:
+            print(f"Autonomous Email Push Loop Exception: {e}")
             
-    email_summary = ""
+        time.sleep(120) # Check every 2 minutes
+
+# ==========================================
+# TOOL MANIFEST FOR MANUAL USER TELEGRAM COMMANDS
+# ==========================================
+def tool_check_vicroads_rego(query: str = "") -> str:
+    """Check VicRoads registration records in inbox."""
+    gmail, _ = get_google_services()
     if gmail:
         try:
             results = gmail.users().messages().list(userId='me', q='vicroads OR rego', maxResults=5).execute()
@@ -388,51 +251,23 @@ def tool_check_vicroads_rego(query: str = "") -> str:
                     headers = msg['payload']['headers']
                     subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
                     snippet = msg.get('snippet', '')
-                    plates = re.findall(r'\b[0-9][A-Z]{2}[0-9][A-Z]{2}\b|\b[0-9][A-Z]{3}[0-9][A-Z]\b', subject + " " + snippet)
-                    plate_str = f" [Plate: {plates[0]}]" if plates else ""
-                    rego_records.append(f"• *{subject}*{plate_str}\n  Snippet: {snippet[:110]}...")
-                email_summary = "\n\n".join(rego_records)
+                    rego_records.append(f"• *{subject}*\n  Snippet: {snippet[:110]}...")
+                return "🚘 *[VICROADS REGISTRATION NOTICES]*\n\n" + "\n\n".join(rego_records)
         except Exception as e:
             print(f"Gmail VicRoads note: {e}")
-            
-    header = f"🚘 *[VICROADS VEHICLE REGISTRATION CHECK]*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n{web_scraper_status}\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    if email_summary:
-        body = f"📩 *YOUR VEHICLE REGISTRATION RECORDS:*\n{email_summary}\n\n"
-    else:
-        body = "📩 *No recent VicRoads registration notices found in inbox.*\n\n"
-        
-    footer = (
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🔗 *Official VicRoads Rego Search Portal:*\n"
-        f"{vicroads_portal_url}"
-    )
-    return header + body + footer
+    return "🚘 VicRoads check: No recent registration notices in inbox."
 
 def tool_search_gmail(query: str) -> str:
-    """Search user's Gmail inbox using clean typo-tolerant keyword extraction."""
-    clean_q = query.lower()
-    if any(w in clean_q for w in ["vicroads", "vicraods", "vicroad", "vic roads", "rego"]):
-        return tool_check_vicroads_rego(query)
-        
+    """Search user's Gmail inbox for specific messages."""
     gmail, _ = get_google_services()
     if not gmail:
         return "Gmail service unavailable."
         
-    if any(w in clean_q for w in ["anz", "bank"]):
-        search_term = "anz"
-    elif "origin" in clean_q:
-        search_term = "origin"
-    elif "kogan" in clean_q:
-        search_term = "kogan"
-    else:
-        words = [w for w in clean_q.split() if w not in ["fetch", "the", "latest", "email", "mail", "from", "get", "show", "me", "my", "find", "search", "for", "please", "about"]]
-        search_term = " ".join(words) if words else query
-        
     try:
-        results = gmail.users().messages().list(userId='me', q=search_term, maxResults=5).execute()
+        results = gmail.users().messages().list(userId='me', q=query, maxResults=5).execute()
         messages = results.get('messages', [])
         if not messages:
-            return f"📧 No emails found matching '{search_term}' in your inbox."
+            return f"📧 No emails found matching '{query}' in your inbox."
         
         email_items = []
         for msg_meta in messages:
@@ -441,25 +276,35 @@ def tool_search_gmail(query: str) -> str:
             subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '(No Subject)')
             sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), '(Unknown)')
             snippet = msg.get('snippet', '')
-            email_items.append(f"• Sender: {sender}\n  Subject: {subject}\n  Snippet: {snippet}")
+            email_items.append(f"• *From:* {sender}\n  *Subject:* {subject}\n  *Snippet:* {snippet[:120]}...")
             
-        return "\n\n".join(email_items)
+        return "📩 *GMAIL SEARCH RESULTS:*\n\n" + "\n\n".join(email_items)
     except Exception as e:
         return f"Error searching Gmail: {e}"
 
+def tool_check_transport(location_query: str = "Ardeer") -> str:
+    """Check PTV Ardeer Station timetable link."""
+    return (
+        f"🚆 *MELBOURNE PTV LIVE TRAIN TIMETABLE*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📍 Station: Ardeer Railway Station (Ballarat & Melton Line)\n"
+        f"🔗 *Live Transport Victoria Departure Board:*\n"
+        f"https://www.ptv.vic.gov.au/stop/1007/ardeer-station/"
+    )
+
 def tool_get_calendar_events(query: str = "") -> str:
-    """Get upcoming Google Calendar events and bill reminders."""
+    """Get upcoming Google Calendar events."""
     _, cal = get_google_services()
     if not cal:
         return "Calendar service unavailable."
     try:
         now = datetime.datetime.utcnow().isoformat() + 'Z'
-        events_result = cal.events().list(calendarId='primary', timeMin=now, maxResults=7, singleEvents=True, orderBy='startTime').execute()
+        events_result = cal.events().list(calendarId='primary', timeMin=now, maxResults=5, singleEvents=True, orderBy='startTime').execute()
         events = events_result.get('items', [])
         if not events:
             return "No upcoming events on your calendar."
         
-        lines = []
+        lines = ["📅 *UPCOMING CALENDAR EVENTS:*"]
         for event in events:
             start = event['start'].get('dateTime', event['start'].get('date'))
             summary = event.get('summary', 'No Title')
@@ -469,189 +314,23 @@ def tool_get_calendar_events(query: str = "") -> str:
         return f"Error reading Calendar: {e}"
 
 # ==========================================
-# TOOL 8: MONGODB ATLAS / LOCAL CLOUD MEMORY
-# ==========================================
-def get_mongo_collection():
-    if pymongo and MONGODB_URI:
-        try:
-            client = pymongo.MongoClient(
-                MONGODB_URI,
-                tls=True,
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=5000
-            )
-            db = client["telegram_agent_db"]
-            return db["memory_ledger"]
-        except Exception as e:
-            print(f"MongoDB Connection Note: {e}")
-    return None
-
-def load_memory_db():
-    collection = get_mongo_collection()
-    if collection is not None:
-        try:
-            raw_docs = list(collection.find({}, {"_id": 0}))
-            if raw_docs:
-                clean_docs = []
-                for d in raw_docs:
-                    clean_doc = {k: str(v) for k, v in d.items()}
-                    clean_docs.append(clean_doc)
-                debts = [d for d in clean_docs if "person" in d]
-                notes = [n for n in clean_docs if "person" not in n]
-                return {"debts_and_loans": debts, "notes": notes}
-        except Exception as e:
-            print(f"MongoDB Load Note: {e}")
-            
-    if os.path.exists(MEMORY_DB_FILE):
-        try:
-            with open(MEMORY_DB_FILE, 'r') as f:
-                return json.load(f)
-        except Exception:
-            pass
-            
-    return {
-        "debts_and_loans": [
-            {
-                "person": "Aish",
-                "amount": "$236.51 + $243.62 (Total: $480.13)",
-                "details": "Car rego payments for her car",
-                "date": "2026-08-02 23:09"
-            }
-        ],
-        "notes": []
-    }
-
-def tool_save_memory(person: str, amount: str, details: str) -> str:
-    """Save a debt, loan, expense, or personal note into persistent Cloud Database."""
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    entry = {
-        "person": str(person or "General Note"),
-        "amount": str(amount or "N/A"),
-        "details": str(details or "Note"),
-        "date": timestamp
-    }
-    
-    collection = get_mongo_collection()
-    if collection is not None:
-        try:
-            collection.insert_one(entry)
-            print("✅ Saved entry directly to MongoDB Atlas Cloud Database!")
-        except Exception as e:
-            print(f"MongoDB Insert Note: {e}")
-            
-    try:
-        db = load_memory_db()
-        db["debts_and_loans"].append(entry)
-        with open(MEMORY_DB_FILE, 'w') as f:
-            json.dump(db, f, indent=2)
-    except Exception as fs_err:
-        print(f"File write note: {fs_err}")
-        
-    return (
-        f"📝 RECORDED IN CLOUD MONEY LEDGER!\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 Person: {entry['person']}\n"
-        f"💰 Amount: {entry['amount']}\n"
-        f"📌 Details: {entry['details']}\n"
-        f"📅 Date: {timestamp}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"Saved permanently in Cloud Database!"
-    )
-
-def tool_search_memory(query: str = "") -> str:
-    """Search or list all saved debts, loans, money records, and notes in persistent Cloud Database."""
-    db = load_memory_db()
-    debts = db.get("debts_and_loans", [])
-    notes = db.get("notes", [])
-    
-    if not debts and not notes:
-        return "🧠 Your persistent Cloud Database is currently empty."
-        
-    lines = ["📝 [YOUR PERMANENT CLOUD MONEY LEDGER]", "━━━━━━━━━━━━━━━━━━━━━━━━━━"]
-    if debts:
-        lines.append("💰 DEBTS & MONEY RECORDS:")
-        for idx, d in enumerate(debts, 1):
-            lines.append(f"{idx}. {d.get('person')}: {d.get('amount')} - {d.get('details')} ({d.get('date')})")
-            
-    if notes:
-        lines.append("\n📌 NOTES & REMINDERS:")
-        for idx, n in enumerate(notes, 1):
-            lines.append(f"{idx}. {n.get('details')} ({n.get('date')})")
-            
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append("Synced permanently via Cloud Database")
-    return "\n".join(lines)
-
-# ==========================================
 # 100% FAIL-SAFE UNIVERSAL AGENT BRAIN
 # ==========================================
 def agent_brain(user_text: str) -> str:
     text_lower = user_text.lower()
     
-    # 1. Currency Exchange Converter (AUD to INR, USD, EUR, etc.)
-    if any(w in text_lower for w in ["currency", "convert", "aud to inr", "inr", "rupees", "exchange rate", "forex"]):
-        amount = 100.0
-        match = re.search(r'\$?([0-9]+(?:\.[0-9]+)?)', text_lower)
-        if match:
-            try:
-                amount = float(match.group(1))
-            except ValueError:
-                amount = 100.0
-        return tool_convert_currency(amount)
-
-    # 2. Melbourne Petrol & Fuel Prices
-    if any(w in text_lower for w in ["fuel", "petrol", "gas", "unleaded", "diesel", "fuel price"]):
-        return tool_get_fuel_prices()
-
-    # 3. Live News Headlines
-    if any(w in text_lower for w in ["news", "headline", "headlines", "breaking news"]):
-        return tool_get_latest_news()
-
-    # 4. Flight Tracking
-    if any(w in text_lower for w in ["flight", "qf", "ek", "sq", "ai302", "jq", "radar"]):
-        return tool_track_flight(user_text)
-
-    # 5. Melbourne Public Transport (PTV & Ardeer)
-    if any(w in text_lower for w in ["train", "tram", "ptv", "station", "ardeer", "flinders", "southern cross", "transit"]):
-        return tool_check_transport(user_text)
-
-    # 6. Live Weather Search
-    if any(w in text_lower for w in ["weather", "temperature", "forecast", "climate", "rain", "sunny"]):
-        city = "Sydney"
-        if "melbourne" in text_lower:
-            city = "Melbourne"
-        elif "brisbane" in text_lower:
-            city = "Brisbane"
-        elif "perth" in text_lower:
-            city = "Perth"
-        elif "india" in text_lower or "delhi" in text_lower:
-            city = "Delhi"
-        return tool_get_weather(city)
-
-    # 7. VicRoads Rego & Car Check
-    if any(w in text_lower for w in ["vicroads", "vicraods", "vicroad", "vic roads", "rego", "check rego", "car rego", "2en7kc", "1vi8ul", "2bi6su"]):
+    if any(w in text_lower for w in ["vicroads", "rego"]):
         return tool_check_vicroads_rego(user_text)
 
-    # 8. Money Database Lookup (debts, ledger, saved records)
-    if any(w in text_lower for w in ["owe", "own", "ledger", "memory", "database", "who owe", "who own", "show"]):
-        return tool_search_memory()
-
-    # 9. Money Record Intent
-    if text_lower.startswith("record") or text_lower.startswith("remember") or text_lower.startswith("save"):
-        person = "Rajesh Anna" if "rajesh" in text_lower else ("Aish" if "aish" in text_lower else "Record")
-        amount = "$0 (Settled)" if "nothing" in text_lower or "0" in user_text else "Recorded Amount"
-        return tool_save_memory(person, amount, user_text)
-
-    # 10. Gmail Inbox Search
-    if any(w in text_lower for w in ["anz", "origin", "inbox", "mail", "email"]):
+    if any(w in text_lower for w in ["email", "inbox", "mail"]):
         return tool_search_gmail(user_text)
 
-    # 11. Google Calendar Search
-    if any(w in text_lower for w in ["calendar", "schedule", "event"]):
+    if any(w in text_lower for w in ["train", "ardeer", "ptv"]):
+        return tool_check_transport(user_text)
+
+    if any(w in text_lower for w in ["calendar", "event"]):
         return tool_get_calendar_events()
 
-    # 12. Gemini 2.0 LLM for General Knowledge & Questions
     if GEMINI_API_KEY:
         try:
             client = genai.Client(api_key=GEMINI_API_KEY)
@@ -668,20 +347,20 @@ def agent_brain(user_text: str) -> str:
         except Exception as e:
             print(f"Gemini LLM Note: {e}")
 
-    # 13. Universal Guaranteed Response
     return f"🤖 Personal Agent: Received your message: '{user_text}'."
 
 # ==========================================
-# TELEGRAM BOT POLLING ENGINE (WITH 8 QUICK BUTTONS)
+# TELEGRAM BOT POLLING ENGINE (CLEAN ESSENTIAL MENU)
 # ==========================================
 def send_telegram_message(chat_id, text):
+    global OWNER_CHAT_ID
+    OWNER_CHAT_ID = str(chat_id)
+    
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     keyboard_markup = {
         "keyboard": [
-            [{"text": "💰 Show Money Ledger"}, {"text": "💱 Convert AUD to INR"}],
-            [{"text": "⛽ Check Petrol Prices"}, {"text": "📰 Latest News"}],
-            [{"text": "🚗 Check VicRoads Rego"}, {"text": "🌤️ Check Weather"}],
-            [{"text": "✈️ Track Flight QF400"}, {"text": "🚆 Ardeer Station Trains"}]
+            [{"text": "📩 Check Inbox"}, {"text": "🚗 Check VicRoads Rego"}],
+            [{"text": "🚆 Ardeer Station Trains"}, {"text": "📅 Check Calendar"}]
         ],
         "resize_keyboard": True,
         "is_persistent": True
@@ -690,7 +369,8 @@ def send_telegram_message(chat_id, text):
         payload = {
             "chat_id": chat_id,
             "text": text,
-            "reply_markup": json.dumps(keyboard_markup)
+            "reply_markup": json.dumps(keyboard_markup),
+            "parse_mode": "Markdown"
         }
         res = requests.post(url, json=payload)
         print(f"Telegram Send Status: {res.status_code}")
@@ -699,10 +379,11 @@ def send_telegram_message(chat_id, text):
 
 def run_telegram_agent():
     threading.Thread(target=run_health_server, daemon=True).start()
+    threading.Thread(target=autonomous_gmail_push_loop, daemon=True).start()
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Multi-Tool Autonomous Personal AI Agent is LIVE...")
+    print(f"🚀 Autonomous AI Gmail Push Agent is LIVE 24/7...")
     
     while True:
         try:
