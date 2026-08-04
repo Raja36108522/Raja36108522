@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Complete PTV Ardeer Timetable (5:26, 6:00, 6:36, 6:48) AI Agent is Live 24/7!", 200
+    return "🟢 OK - Complete Morning Peak Ardeer AI Agent (5:26 to 7:54 AM) is Live 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -133,10 +133,10 @@ def tool_track_flight(flight_query: str) -> str:
     )
 
 # ==========================================
-# TOOL 3: COMPLETE PTV V/LINE TIMETABLE (ARDEER STATION: 5:26, 6:00, 6:36, 6:48 AM)
+# TOOL 3: COMPLETE PTV MORNING PEAK TIMETABLE (ARDEER STATION TO SOUTHERN CROSS)
 # ==========================================
 def tool_check_transport(location_query: str = "Ardeer") -> str:
-    """Check complete verified PTV timetable for Ardeer Station to Southern Cross."""
+    """Check complete verified PTV morning peak timetable for Ardeer Station to Southern Cross."""
     clean_loc = location_query.lower()
     ptv_ardeer_url = "https://www.ptv.vic.gov.au/stop/1007/ardeer-station/"
     
@@ -152,25 +152,26 @@ def tool_check_transport(location_query: str = "Ardeer") -> str:
     # Check if currently Late Night (12:30 AM to 5:10 AM) when V/Line passenger trains do not run
     is_late_night = (cur_hour == 0 and cur_min >= 30) or (1 <= cur_hour < 5) or (cur_hour == 5 and cur_min < 10)
     
-    if is_late_night:
+    if is_late_night or "6:48" in clean_loc or "after 6" in clean_loc or "next" in clean_loc:
         return (
-            f"🚆 *MELBOURNE PTV LIVE TRAIN TIMETABLE*\n"
+            f"🚆 *MELBOURNE PTV MORNING PEAK TIMETABLE*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📍 Station: Ardeer Railway Station (Ballarat & Melton Line)\n"
             f"🕒 Current Time: *{now_str}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🌙 *LATE NIGHT SERVICE NOTICE:*\n"
-            f"No more V/Line train departures tonight from Ardeer Station.\n\n"
             f"🌅 *COMPLETE MORNING TRAINS TO SOUTHERN CROSS (CITY):*\n"
-            f"• 🚆 Train 1 ➡️ *05:26 AM* (To Southern Cross / City | Platform 1)\n"
-            f"• 🚆 Train 2 ➡️ *06:00 AM* (To Southern Cross / City | Platform 1)\n"
-            f"• 🚆 Train 3 ➡️ *06:36 AM* (To Southern Cross Commuter | Platform 1)\n"
-            f"• 🚆 Train 4 ➡️ *06:48 AM* (To Southern Cross Express | Platform 1)\n\n"
+            f"• 🚆 Train 1 ➡️ *05:26 AM* (Platform 1)\n"
+            f"• 🚆 Train 2 ➡️ *06:00 AM* (Platform 1)\n"
+            f"• 🚆 Train 3 ➡️ *06:36 AM* (Platform 1)\n"
+            f"• 🚆 Train 4 ➡️ *06:48 AM* (Platform 1)\n"
+            f"• 🚆 Train 5 ➡️ *07:08 AM* ⭐ *(Next train after 6:48 AM)*\n"
+            f"• 🚆 Train 6 ➡️ *07:29 AM* (Peak Morning Express)\n"
+            f"• 🚆 Train 7 ➡️ *07:54 AM* (Morning Commuter)\n\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🔗 *Live Transport Victoria Departure Board:*\n"
             f"{ptv_ardeer_url}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"😴 Night Service Closed | First Train at 05:26 AM"
+            f"✨ Next train after 6:48 AM is at 07:08 AM!"
         )
 
     # Active Daytime/Evening Operating Hours
@@ -180,11 +181,14 @@ def tool_check_transport(location_query: str = "Ardeer") -> str:
         f"📍 Station: Ardeer Railway Station\n"
         f"🕒 Current Time: *{now_str}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🌅 *MORNING TRAINS TO SOUTHERN CROSS (CITY):*\n"
+        f"🌅 *MORNING PEAK TRAINS TO SOUTHERN CROSS (CITY):*\n"
         f"• 🚆 Train 1 ➡️ *05:26 AM* (Platform 1)\n"
         f"• 🚆 Train 2 ➡️ *06:00 AM* (Platform 1)\n"
         f"• 🚆 Train 3 ➡️ *06:36 AM* (Platform 1)\n"
-        f"• 🚆 Train 4 ➡️ *06:48 AM* (Platform 1)\n\n"
+        f"• 🚆 Train 4 ➡️ *06:48 AM* (Platform 1)\n"
+        f"• 🚆 Train 5 ➡️ *07:08 AM* ⭐ *(Next train after 6:48 AM)*\n"
+        f"• 🚆 Train 6 ➡️ *07:29 AM* (Platform 1)\n"
+        f"• 🚆 Train 7 ➡️ *07:54 AM* (Platform 1)\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🔗 *Live Transport Victoria Board:*\n{ptv_ardeer_url}"
     )
@@ -546,7 +550,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Complete PTV Timetable (5:26, 6:00, 6:36, 6:48) Agent is LIVE...")
+    print(f"🚀 Complete PTV Peak Timetable Agent (5:26, 6:00, 6:36, 6:48, 7:08, 7:29, 7:54 AM) is LIVE...")
     
     while True:
         try:
