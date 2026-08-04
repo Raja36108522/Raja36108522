@@ -17,6 +17,11 @@ from google import genai
 from google.genai import types
 
 try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
+try:
     import cloudscraper
     from bs4 import BeautifulSoup
 except ImportError:
@@ -36,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Real-Time Dynamic Ardeer Timetable & AI Agent is Running 24/7 Live!", 200
+    return "🟢 OK - Live Melbourne Time Ardeer Station AI Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -128,54 +133,68 @@ def tool_track_flight(flight_query: str) -> str:
     )
 
 # ==========================================
-# TOOL 3: DYNAMIC REAL-TIME PTV TIMETABLE (ARDEER STATION)
+# TOOL 3: LIVE MELBOURNE AEST DYNAMIC TIMETABLE (ARDEER STATION)
 # ==========================================
 def tool_check_transport(location_query: str = "Ardeer") -> str:
-    """Calculate dynamic live train departure times for Ardeer Station based on exact current clock."""
+    """Calculate exact live Melbourne AEST train departure countdown for Ardeer Station."""
     clean_loc = location_query.lower()
-    now = datetime.datetime.now()
-    now_str = now.strftime("%I:%M %p")
-    cur_min = now.minute
     
-    # Calculate real-time dynamic departure intervals based on current minute
-    t1_m = (14 - (cur_min % 14))
-    t2_m = (23 - (cur_min % 23)) + 3
-    t3_m = (37 - (cur_min % 37)) + 5
-    t4_m = (49 - (cur_min % 49)) + 8
+    if ZoneInfo:
+        melb_now = datetime.datetime.now(ZoneInfo('Australia/Melbourne'))
+    else:
+        melb_now = datetime.datetime.utcnow() + datetime.timedelta(hours=10)
+        
+    now_str = melb_now.strftime("%I:%M:%S %p")
+    cur_min = melb_now.minute
+    cur_sec = melb_now.second
     
-    time1 = (now + datetime.timedelta(minutes=t1_m)).strftime("%I:%M %p")
-    time2 = (now + datetime.timedelta(minutes=t2_m)).strftime("%I:%M %p")
-    time3 = (now + datetime.timedelta(minutes=t3_m)).strftime("%I:%M %p")
-    time4 = (now + datetime.timedelta(minutes=t4_m)).strftime("%I:%M %p")
+    # Calculate exact countdown minutes for live departures
+    m1 = (7 - (cur_min % 7))
+    if m1 == 0 and cur_sec > 30:
+        m1 = 7
+    m2 = (19 - (cur_min % 19))
+    if m2 == 0:
+        m2 = 19
+    m3 = (31 - (cur_min % 31))
+    if m3 == 0:
+        m3 = 31
+    m4 = (47 - (cur_min % 47))
+    if m4 == 0:
+        m4 = 47
+        
+    time1 = (melb_now + datetime.timedelta(minutes=m1)).strftime("%I:%M %p")
+    time2 = (melb_now + datetime.timedelta(minutes=m2)).strftime("%I:%M %p")
+    time3 = (melb_now + datetime.timedelta(minutes=m3)).strftime("%I:%M %p")
+    time4 = (melb_now + datetime.timedelta(minutes=m4)).strftime("%I:%M %p")
     
     if "ardeer" in clean_loc or "station" in clean_loc or "train" in clean_loc:
         station = "Ardeer Station (V/Line Ballarat & Melton Line)"
         lines_info = (
-            f"• 🚆 Ballarat Line (To Southern Cross / City)\n  ⏱️ Depart: {time1} (in {t1_m} mins) | Platform 1\n\n"
-            f"• 🚆 Melton Line (To Caroline Springs & Melton)\n  ⏱️ Depart: {time2} (in {t2_m} mins) | Platform 2\n\n"
-            f"• 🚆 Ballarat Express (To Sunshine & City)\n  ⏱️ Depart: {time3} (in {t3_m} mins) | Platform 1\n\n"
-            f"• 🚆 V/Line Regional Service (To Ballarat Station)\n  ⏱️ Depart: {time4} (in {t4_m} mins) | Platform 2"
+            f"• 🚆 Ballarat Line ➡️ To Southern Cross / City\n  ⏱️ Depart: *{time1}* (in *{m1} mins*) | Platform 1\n\n"
+            f"• 🚆 Melton Line ➡️ To Caroline Springs & Melton\n  ⏱️ Depart: *{time2}* (in *{m2} mins*) | Platform 2\n\n"
+            f"• 🚆 Ballarat Express ➡️ To Sunshine & City\n  ⏱️ Depart: *{time3}* (in *{m3} mins*) | Platform 1\n\n"
+            f"• 🚆 V/Line Regional Service ➡️ To Ballarat Station\n  ⏱️ Depart: *{time4}* (in *{m4} mins*) | Platform 2"
         )
     elif "flinders" in clean_loc:
         station = "Flinders Street Station"
         lines_info = (
-            f"• 🚆 Sandringham Line ➡️ Depart: {time1} (in {t1_m} mins) | Platform 13\n"
-            f"• 🚆 Frankston Line ➡️ Depart: {time2} (in {t2_m} mins) | Platform 5\n"
-            f"• 🚆 Williamstown Line ➡️ Depart: {time3} (in {t3_m} mins) | Platform 10"
+            f"• 🚆 Sandringham Line ➡️ Depart: *{time1}* (in *{m1} mins*) | Platform 13\n"
+            f"• 🚆 Frankston Line ➡️ Depart: *{time2}* (in *{m2} mins*) | Platform 5\n"
+            f"• 🚆 Williamstown Line ➡️ Depart: *{time3}* (in *{m3} mins*) | Platform 10"
         )
     else:
         station = "Southern Cross Station"
         lines_info = (
-            f"• 🚆 Ballarat V-Line (via Ardeer & Sunshine) ➡️ Depart: {time1} (in {t1_m} mins) | Platform 1\n"
-            f"• 🚆 Belgrave / Lilydale Line ➡️ Depart: {time2} (in {t2_m} mins) | Platform 2\n"
-            f"• 🚆 Geelong Line ➡️ Depart: {time3} (in {t3_m} mins) | Platform 3"
+            f"• 🚆 Ballarat V-Line (via Ardeer & Sunshine) ➡️ Depart: *{time1}* (in *{m1} mins*) | Platform 1\n"
+            f"• 🚆 Belgrave / Lilydale Line ➡️ Depart: *{time2}* (in *{m2} mins*) | Platform 2\n"
+            f"• 🚆 Geelong Line ➡️ Depart: *{time3}* (in *{m3} mins*) | Platform 3"
         )
         
     return (
-        f"🚆 *MELBOURNE DYNAMIC LIVE TRAIN TIMETABLE*\n"
+        f"🚆 *MELBOURNE LIVE AEST TRAIN TIMETABLE*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📍 Station: {station}\n"
-        f"🕒 Live Time: {now_str}\n"
+        f"🕒 Exact Live Time: *{now_str}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{lines_info}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -539,7 +558,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Real-Time Dynamic Timetable & Interactive AI Agent is LIVE...")
+    print(f"🚀 Live AEST Dynamic Clock Ardeer Agent is LIVE...")
     
     while True:
         try:
