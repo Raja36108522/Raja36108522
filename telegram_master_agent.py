@@ -7,6 +7,8 @@ import re
 import base64
 import datetime
 import threading
+import hmac
+import hashlib
 import requests
 from flask import Flask
 from google.auth.transport.requests import Request
@@ -41,7 +43,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Verified PTV Timetable (5:26, 6:00, 6:36, 6:48, 7:15, 7:38 AM) AI Agent is Live 24/7!", 200
+    return "🟢 OK - Official PTV Real-Time API Engine for Ardeer AI Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -62,6 +64,9 @@ TELEGRAM_BOT_TOKEN = raw_tok if (raw_tok and len(raw_tok) > 10) else "8894589298
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
 MONGODB_URI = os.environ.get("MONGODB_URI", "")
+PTV_DEV_ID = os.environ.get("PTV_DEV_ID", "")
+PTV_API_KEY = os.environ.get("PTV_API_KEY", "")
+
 MEMORY_DB_FILE = "/tmp/user_memory_ledger.json" if os.path.exists("/tmp") else "user_memory_ledger.json"
 
 DEFAULT_MEMORY_BASE64 = "ewogICJkZWJ0c19hbmRfbG9hbnMiOiBbCiAgICB7CiAgICAgICJwZXJzb24iOiAiQWlzaCIsCiAgICAgICJhbW91bnQiOiAiJDIzNi41MSArICQyNDMuNjIgKFRvdGFsOiAkNDgwLjEzKSIsCiAgICAgICJkZXRhaWxzIjogIkNhciByZWdvIHBheW1lbnRzIGZvciBoZXIgY2FyIiwKICAgICAgImRhdGUiOiAiMjAyNi0wOC0wMiAyMzowOSIKICAgIH0KICBdLAogICJub3RlcyI6IFtdCn0="
@@ -133,11 +138,17 @@ def tool_track_flight(flight_query: str) -> str:
     )
 
 # ==========================================
-# TOOL 3: EXACT VERIFIED PTV TIMETABLE (ARDEER STATION TO SOUTHERN CROSS)
+# TOOL 3: OFFICIAL PTV REAL-TIME SERVER API (ARDEER STATION - STOP 1007)
 # ==========================================
+def generate_ptv_url(request_path: str, dev_id: str, api_key: str) -> str:
+    """Generate authenticated URL for PTV API v3 using HMAC-SHA1."""
+    raw = f"{request_path}?devid={dev_id}"
+    hashed = hmac.new(api_key.encode('utf-8'), raw.encode('utf-8'), hashlib.sha1)
+    signature = hashed.hexdigest().upper()
+    return f"https://timetableapi.ptv.vic.gov.au{raw}&signature={signature}"
+
 def tool_check_transport(location_query: str = "Ardeer") -> str:
-    """Check exact verified PTV morning peak timetable for Ardeer Station (5:26, 6:00, 6:36, 6:48, 7:15, 7:38 AM)."""
-    clean_loc = location_query.lower()
+    """Fetch 100% official live departures directly from PTV Real-Time API for Ardeer Railway Station."""
     ptv_ardeer_url = "https://www.ptv.vic.gov.au/stop/1007/ardeer-station/"
     
     if ZoneInfo:
@@ -146,49 +157,58 @@ def tool_check_transport(location_query: str = "Ardeer") -> str:
         melb_now = datetime.datetime.utcnow() + datetime.timedelta(hours=10)
         
     now_str = melb_now.strftime("%I:%M %p")
-    cur_hour = melb_now.hour
-    cur_min = melb_now.minute
-    
-    # Check if currently Late Night (12:30 AM to 5:10 AM) when V/Line passenger trains do not run
-    is_late_night = (cur_hour == 0 and cur_min >= 30) or (1 <= cur_hour < 5) or (cur_hour == 5 and cur_min < 10)
-    
-    if is_late_night or "7:15" in clean_loc or "after 7:15" in clean_loc or "next" in clean_loc or "7:38" in clean_loc:
-        return (
-            f"🚆 *MELBOURNE PTV MORNING PEAK TIMETABLE*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📍 Station: Ardeer Railway Station (Ballarat & Melton Line)\n"
-            f"🕒 Current Time: *{now_str}*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🌅 *EXACT MORNING TRAINS TO SOUTHERN CROSS (CITY):*\n"
-            f"• 🚆 Train 1 ➡️ *05:26 AM* (Platform 1)\n"
-            f"• 🚆 Train 2 ➡️ *06:00 AM* (Platform 1)\n"
-            f"• 🚆 Train 3 ➡️ *06:36 AM* (Platform 1)\n"
-            f"• 🚆 Train 4 ➡️ *06:48 AM* (Platform 1)\n"
-            f"• 🚆 Train 5 ➡️ *07:15 AM* (Platform 1)\n"
-            f"• 🚆 Train 6 ➡️ *07:38 AM* ⭐ *(Next train after 07:15 AM)*\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔗 *Live Transport Victoria Departure Board:*\n"
-            f"{ptv_ardeer_url}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✨ Next train after 07:15 AM is at 07:38 AM!"
-        )
 
-    # Active Daytime/Evening Operating Hours
+    # If user has configured PTV_DEV_ID and PTV_API_KEY in Render
+    if PTV_DEV_ID and PTV_API_KEY:
+        try:
+            # Route Type 3 = V/Line Regional Train, Stop ID 1007 = Ardeer Station
+            req_path = "/v3/departures/route_type/3/stop/1007"
+            api_url = generate_ptv_url(req_path, PTV_DEV_ID, PTV_API_KEY)
+            res = requests.get(api_url, timeout=5)
+            
+            if res.status_code == 200:
+                data = res.json()
+                departures = data.get("departures", [])
+                
+                if departures:
+                    lines = [
+                        f"🚆 *OFFICIAL PTV LIVE SERVER DEPARTURES*",
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                        f"📍 Station: Ardeer Railway Station (V/Line Ballarat & Melton)",
+                        f"🕒 Live Time: *{now_str}*",
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    ]
+                    
+                    for dep in departures[:6]:
+                        sched_time_str = dep.get("scheduled_departure_utc")
+                        if sched_time_str:
+                            utc_dt = datetime.datetime.fromisoformat(sched_time_str.replace("Z", "+00:00"))
+                            if ZoneInfo:
+                                local_dt = utc_dt.astimezone(ZoneInfo('Australia/Melbourne'))
+                            else:
+                                local_dt = utc_dt + datetime.timedelta(hours=10)
+                            dep_time_formatted = local_dt.strftime("%I:%M %p")
+                            platform = dep.get("platform_number", "1/2")
+                            lines.append(f"• 🚆 Departure: *{dep_time_formatted}* | Platform {platform}")
+                            
+                    lines.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"🔗 *Live Transport Victoria Board:*\n{ptv_ardeer_url}")
+                    lines.append("✅ Pulled directly from PTV Real-Time Server")
+                    return "\n".join(lines)
+        except Exception as ptv_err:
+            print(f"PTV API Execution Note: {ptv_err}")
+
+    # Direct Official Live Portal View
     return (
-        f"🚆 *MELBOURNE PTV LIVE TRAIN TIMETABLE*\n"
+        f"🚆 *MELBOURNE PTV REAL-TIME DEPARTURE BOARD*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 Station: Ardeer Railway Station\n"
-        f"🕒 Current Time: *{now_str}*\n"
+        f"📍 Station: Ardeer Railway Station (V/Line Ballarat & Melton Line)\n"
+        f"🕒 Live Time: *{now_str}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🌅 *EXACT MORNING TRAINS TO SOUTHERN CROSS (CITY):*\n"
-        f"• 🚆 Train 1 ➡️ *05:26 AM* (Platform 1)\n"
-        f"• 🚆 Train 2 ➡️ *06:00 AM* (Platform 1)\n"
-        f"• 🚆 Train 3 ➡️ *06:36 AM* (Platform 1)\n"
-        f"• 🚆 Train 4 ➡️ *06:48 AM* (Platform 1)\n"
-        f"• 🚆 Train 5 ➡️ *07:15 AM* (Platform 1)\n"
-        f"• 🚆 Train 6 ➡️ *07:38 AM* ⭐ *(Next train after 07:15 AM)*\n\n"
+        f"🔗 *Tap below for Live PTV Real-Time GPS Departure Screen:*\n"
+        f"{ptv_ardeer_url}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔗 *Live Transport Victoria Board:*\n{ptv_ardeer_url}"
+        f"ℹ️ Configured for Official PTV Developer API (`PTV_DEV_ID` & `PTV_API_KEY`)."
     )
 
 # ==========================================
@@ -548,7 +568,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Verified PTV 07:38 AM Train Agent is LIVE...")
+    print(f"🚀 Official PTV Real-Time API Engine for Ardeer AI Agent is LIVE...")
     
     while True:
         try:
