@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - 100% Fully Dynamic VicRoads Web Inspector Agent is Running 24/7!", 200
+    return "🟢 OK - Pure Generic VicRoads Web Inspector Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,7 +146,7 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO HARDCODED PLATES!)
+# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO CAR ENTRIES!)
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
     """Submit ANY plate dynamically to official VicRoads web portal and parse returned HTML live."""
@@ -244,10 +244,8 @@ def tool_check_vicroads_rego(query: str = "") -> str:
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "Please type the registration plate number you want to check!\n"
             "👉 *Examples:*\n"
-            "• `rego 2EN7KC`\n"
-            "• `rego 1VI8UL`\n"
-            "• `rego 2BI6SU`\n"
-            "• `rego 2EN7KV`\n"
+            "• `rego 1ABC23`\n"
+            "• `rego 3XYZ99`\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "🌐 Scraped 100% Live from vicroads.vic.gov.au"
         )
@@ -508,7 +506,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Fully Dynamic VicRoads Web Inspector Agent is LIVE 24/7...")
+    print(f"🚀 Fully Generic VicRoads Web Inspector Agent is LIVE 24/7...")
     
     while True:
         try:
