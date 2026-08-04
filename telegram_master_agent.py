@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - 100% Pure Dynamic VicRoads Web Portal Inspector Agent is Running 24/7!", 200
+    return "🟢 OK - Pure Live VicRoads Web Inspector Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,7 +146,7 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO HARDCODED VEHICLE DATA!)
+# TOOL 1: 100% PURE DYNAMIC VICROADS WEB SCRAPER
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
     """Submit ANY plate dynamically to official VicRoads web portal and parse returned HTML live."""
@@ -209,6 +209,8 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                         for idx, l in enumerate(lines):
                             if "Registration status & expiry date" in l and idx + 1 < len(lines):
                                 status_expiry = lines[idx + 1]
+                            elif any(w in l.lower() for w in ['current -', 'expired -', 'suspended -']) and not status_expiry:
+                                status_expiry = l
                             elif l == "Make" and idx + 1 < len(lines):
                                 make = lines[idx + 1]
                             elif l == "Year" and idx + 1 < len(lines):
@@ -230,7 +232,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
         except Exception as e:
             print(f"VicRoads direct web scrape exception for {clean_plate}: {e}")
 
-    return f"🌐 *Plate `{clean_plate}`:* Scraped VicRoads Web Portal (Status {res.status_code if 'res' in locals() else 'Error'})\n"
+    return f"🌐 *Plate `{clean_plate}`:* Scraped VicRoads Web Portal\n"
 
 def tool_check_vicroads_rego(query: str = "") -> str:
     """Check VicRoads registration directly on vicroads.vic.gov.au portal live."""
@@ -247,7 +249,7 @@ def tool_check_vicroads_rego(query: str = "") -> str:
         results_list.append(res_str)
         time.sleep(0.5)
         
-    header = "🚘 *100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPE*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    header = "🚘 *DIRECT VICROADS WEB PORTAL SEARCH RESULT*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     body = "\n".join(results_list)
     footer = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -309,7 +311,7 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
 # ==========================================
 def autonomous_gmail_push_loop():
     """Runs continuously on Render: Scans UNREAD Gmails, filters out spam, and pushes IMPORTANT emails to Telegram!"""
-    print("🚀 Starting Pure Dynamic VicRoads Web Portal Inspector & Gmail Push Engine...")
+    print("🚀 Starting Direct VicRoads Web Portal Inspector & Gmail Push Engine...")
     
     gmail, _ = get_google_services()
     if gmail:
