@@ -151,8 +151,7 @@ def get_google_services():
 KNOWN_VEHICLES = {
     '2EN7KC': {'status': 'Current - 10/12/2026', 'make': 'VOLKSWAGEN', 'year': '2020', 'body': 'SEDAN', 'colour': 'WHITE', 'vin': 'WVWZZZAUZLW065785'},
     '1VI8UL': {'status': 'Current - 14/11/2026', 'make': 'MAZDA', 'year': '2021', 'body': 'WAGON', 'colour': 'BLACK', 'vin': 'JM0KG2W7A00201234'},
-    '2BI6SU': {'status': 'Current - 16/11/2026', 'make': 'M.G.', 'year': '2022', 'body': 'WAGON', 'colour': 'BLACK', 'vin': 'LPS54321098765432'},
-    '2EN7KV': {'status': 'Current - 12/06/2027', 'make': 'VOLKSWAGEN', 'year': '2019', 'body': 'WAGON', 'colour': 'GREY', 'vin': 'WVGZZZ5NZKM149265'}
+    '2BI6SU': {'status': 'Current - 16/11/2026', 'make': 'M.G.', 'year': '2022', 'body': 'WAGON', 'colour': 'BLACK', 'vin': 'LPS54321098765432'}
 }
 
 # ==========================================
@@ -265,7 +264,7 @@ def tool_check_vicroads_rego(query: str = "") -> str:
     
     if not plates:
         # Default to checking all owner vehicles if button clicked
-        target_plates = ["2EN7KC", "1VI8UL", "2BI6SU", "2EN7KV"]
+        target_plates = ["2EN7KC", "1VI8UL", "2BI6SU"]
     else:
         target_plates = plates
         
