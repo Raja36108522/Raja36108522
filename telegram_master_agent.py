@@ -43,7 +43,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Official PTV Real-Time API Engine for Ardeer AI Agent is Running 24/7!", 200
+    return "🟢 OK - Auto-Scanning PTV API Key AI Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -147,6 +147,25 @@ def generate_ptv_url(request_path: str, dev_id: str, api_key: str) -> str:
     signature = hashed.hexdigest().upper()
     return f"https://timetableapi.ptv.vic.gov.au{raw}&signature={signature}"
 
+def check_ptv_inbox_key():
+    """Auto-scan Gmail inbox for PTV API key reply."""
+    gmail, _ = get_google_services()
+    if gmail:
+        try:
+            results = gmail.users().messages().list(userId='me', q='ptv AND key', maxResults=3).execute()
+            messages = results.get('messages', [])
+            if messages:
+                for msg_meta in messages:
+                    msg = gmail.users().messages().get(userId='me', id=msg_meta['id'], format='full').execute()
+                    snippet = msg.get('snippet', '')
+                    dev_ids = re.findall(r'\b\d{7}\b', snippet)
+                    api_keys = re.findall(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', snippet, re.I)
+                    if dev_ids and api_keys:
+                        return dev_ids[0], api_keys[0]
+        except Exception as e:
+            print(f"PTV Inbox Scan Note: {e}")
+    return None, None
+
 def tool_check_transport(location_query: str = "Ardeer") -> str:
     """Fetch 100% official live departures directly from PTV Real-Time API for Ardeer Railway Station."""
     ptv_ardeer_url = "https://www.ptv.vic.gov.au/stop/1007/ardeer-station/"
@@ -158,12 +177,22 @@ def tool_check_transport(location_query: str = "Ardeer") -> str:
         
     now_str = melb_now.strftime("%I:%M %p")
 
-    # If user has configured PTV_DEV_ID and PTV_API_KEY in Render
-    if PTV_DEV_ID and PTV_API_KEY:
+    dev_id = PTV_DEV_ID
+    api_key = PTV_API_KEY
+    
+    # Auto-check inbox if keys not present in ENV
+    if not dev_id or not api_key:
+        auto_dev, auto_key = check_ptv_inbox_key()
+        if auto_dev and auto_key:
+            dev_id = auto_dev
+            api_key = auto_key
+            print(f"✅ Auto-detected PTV API Key from Inbox! DevID: {dev_id}")
+
+    # If PTV_DEV_ID and PTV_API_KEY are active
+    if dev_id and api_key:
         try:
-            # Route Type 3 = V/Line Regional Train, Stop ID 1007 = Ardeer Station
             req_path = "/v3/departures/route_type/3/stop/1007"
-            api_url = generate_ptv_url(req_path, PTV_DEV_ID, PTV_API_KEY)
+            api_url = generate_ptv_url(req_path, dev_id, api_key)
             res = requests.get(api_url, timeout=5)
             
             if res.status_code == 200:
@@ -198,17 +227,18 @@ def tool_check_transport(location_query: str = "Ardeer") -> str:
         except Exception as ptv_err:
             print(f"PTV API Execution Note: {ptv_err}")
 
-    # Direct Official Live Portal View
+    # Direct Official Live Portal View & Status Notice
     return (
         f"🚆 *MELBOURNE PTV REAL-TIME DEPARTURE BOARD*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📍 Station: Ardeer Railway Station (V/Line Ballarat & Melton Line)\n"
         f"🕒 Live Time: *{now_str}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📩 *PTV Key Request Status:*\n"
+        f"Request email sent to `APIKeyRequest@ptv.vic.gov.au`.\n"
+        f"Your bot will auto-detect the reply from PTV in your inbox!\n\n"
         f"🔗 *Tap below for Live PTV Real-Time GPS Departure Screen:*\n"
-        f"{ptv_ardeer_url}\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"ℹ️ Configured for Official PTV Developer API (`PTV_DEV_ID` & `PTV_API_KEY`)."
+        f"{ptv_ardeer_url}"
     )
 
 # ==========================================
@@ -568,7 +598,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Official PTV Real-Time API Engine for Ardeer AI Agent is LIVE...")
+    print(f"🚀 Auto-Scanning PTV API Key AI Agent is LIVE...")
     
     while True:
         try:
