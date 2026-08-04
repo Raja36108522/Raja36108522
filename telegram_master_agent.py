@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - Autonomous AI Gmail Push Classifier Agent is Running 24/7!", 200
+    return "🟢 OK - Persistent Autonomous AI Gmail Push Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -62,9 +62,26 @@ TELEGRAM_BOT_TOKEN = raw_tok if (raw_tok and len(raw_tok) > 10) else "8894589298
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TOKEN_JSON_BASE64 = os.environ.get("TOKEN_JSON_BASE64", "")
 MONGODB_URI = os.environ.get("MONGODB_URI", "")
-OWNER_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "") # Auto-stored on first interaction
 
-MEMORY_DB_FILE = "/tmp/user_memory_ledger.json" if os.path.exists("/tmp") else "user_memory_ledger.json"
+# Persistent Chat ID storage
+CHAT_ID_FILE = "/tmp/owner_chat_id.txt" if os.path.exists("/tmp") else "owner_chat_id.txt"
+
+def load_chat_id():
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not chat_id and os.path.exists(CHAT_ID_FILE):
+        try:
+            with open(CHAT_ID_FILE, 'r') as f:
+                chat_id = f.read().strip()
+        except Exception:
+            pass
+    return chat_id
+
+def save_chat_id(chat_id_str):
+    try:
+        with open(CHAT_ID_FILE, 'w') as f:
+            f.write(str(chat_id_str))
+    except Exception as e:
+        print(f"Save chat id note: {e}")
 
 if TOKEN_JSON_BASE64:
     try:
@@ -133,9 +150,8 @@ def get_google_services():
 # ==========================================
 def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
     """Use Gemini 2.0 AI to classify email as IMPORTANT or UNIMPORTANT."""
-    # Strict rule triggers for immediate importance
     combined = (sender + " " + subject + " " + snippet).lower()
-    important_keywords = ["vicroads", "rego", "anz", "bank", "bill", "invoice", "visa", "immigration", "origin", "urgent", "payment due", "receipt"]
+    important_keywords = ["vicroads", "rego", "anz", "bank", "bill", "invoice", "visa", "immigration", "origin", "urgent", "payment", "remainder", "receipt", "account"]
     
     if any(k in combined for k in important_keywords):
         return {
@@ -149,7 +165,7 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
             client = genai.Client(api_key=GEMINI_API_KEY)
             prompt = (
                 f"Classify this email:\nSender: {sender}\nSubject: {subject}\nSnippet: {snippet}\n\n"
-                f"Is this email IMPORTANT (e.g. bills, banking, personal messages, official notices, work, flight, visa) "
+                f"Is this email IMPORTANT (e.g. bills, banking, personal messages, official notices, work, flight, visa, reminders) "
                 f"or UNIMPORTANT (e.g. promotional discounts, newsletters, spam, marketing)?\n"
                 f"Reply in JSON format: {{\"is_important\": true/false, \"reason\": \"brief explanation\"}}"
             )
@@ -184,14 +200,16 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
 # AUTONOMOUS BACKGROUND EMAIL PUSH ENGINE
 # ==========================================
 def autonomous_gmail_push_loop():
-    """Runs every 2 minutes on Render: Scans Gmail, classifies with AI, and pushes IMPORTANT emails to Telegram!"""
-    print("🚀 Starting Autonomous Gmail Background Push Engine...")
+    """Runs continuously: Scans Gmail, classifies with AI, and pushes IMPORTANT emails to Telegram!"""
+    print("🚀 Starting Persistent Autonomous Gmail Background Push Engine...")
     
     while True:
         try:
             gmail, _ = get_google_services()
-            if gmail and OWNER_CHAT_ID:
-                results = gmail.users().messages().list(userId='me', q='is:unread', maxResults=10).execute()
+            owner_chat_id = load_chat_id()
+            
+            if gmail and owner_chat_id:
+                results = gmail.users().messages().list(userId='me', maxResults=7).execute()
                 messages = results.get('messages', [])
                 
                 for msg_meta in messages:
@@ -205,12 +223,12 @@ def autonomous_gmail_push_loop():
                     sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), '(Unknown)')
                     snippet = msg.get('snippet', '')
                     
-                    # Run AI Classification
-                    classification = classify_email_with_ai(sender, subject, snippet)
-                    
-                    # Mark email as processed in database
+                    # Mark email as evaluated
                     processed_email_ids.add(msg_id)
                     save_processed_ids()
+                    
+                    # Run AI Classification
+                    classification = classify_email_with_ai(sender, subject, snippet)
                     
                     # PUSH TO TELEGRAM AUTOMATICALLY IF IMPORTANT!
                     if classification["is_important"]:
@@ -224,15 +242,15 @@ def autonomous_gmail_push_loop():
                             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                             f"⚡ Pushed automatically by your AI Personal Agent!"
                         )
-                        send_telegram_message(OWNER_CHAT_ID, alert_text)
+                        send_telegram_message(owner_chat_id, alert_text)
                         print(f"✅ AUTOMATICALLY PUSHED IMPORTANT EMAIL TO TELEGRAM: '{subject}'")
                     else:
-                        print(f"🙈 Filtered out unimportant email: '{subject}'")
+                        print(f"🙈 Filtered out unimportant marketing email: '{subject}'")
                         
         except Exception as e:
             print(f"Autonomous Email Push Loop Exception: {e}")
             
-        time.sleep(120) # Check every 2 minutes
+        time.sleep(30) # Scan every 30 seconds
 
 # ==========================================
 # TOOL MANIFEST FOR MANUAL USER TELEGRAM COMMANDS
@@ -350,11 +368,10 @@ def agent_brain(user_text: str) -> str:
     return f"🤖 Personal Agent: Received your message: '{user_text}'."
 
 # ==========================================
-# TELEGRAM BOT POLLING ENGINE (CLEAN ESSENTIAL MENU)
+# TELEGRAM BOT POLLING ENGINE (AUTOSAVES CHAT ID)
 # ==========================================
 def send_telegram_message(chat_id, text):
-    global OWNER_CHAT_ID
-    OWNER_CHAT_ID = str(chat_id)
+    save_chat_id(str(chat_id))
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     keyboard_markup = {
@@ -383,7 +400,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Autonomous AI Gmail Push Agent is LIVE 24/7...")
+    print(f"🚀 Persistent Autonomous AI Gmail Push Agent is LIVE 24/7...")
     
     while True:
         try:
@@ -397,6 +414,7 @@ def run_telegram_agent():
                     text = message.get("text", "")
                     
                     if chat_id and text:
+                        save_chat_id(str(chat_id))
                         print(f"\n💬 Telegram Message from Owner ({chat_id}): '{text}'")
                         reply = agent_brain(text)
                         print(f"🤖 Universal Agent Reply:\n{reply}")
