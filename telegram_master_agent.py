@@ -41,7 +41,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "🟢 OK - 100% Direct VicRoads Web Portal Inspector Agent is Running 24/7!", 200
+    return "🟢 OK - 100% Pure Dynamic VicRoads Web Portal Inspector Agent is Running 24/7!", 200
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
@@ -146,10 +146,10 @@ def get_google_services():
     return None, None
 
 # ==========================================
-# TOOL 1: 100% DIRECT VICROADS WEB PORTAL SCRAPER
+# TOOL 1: 100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPER (ZERO HARDCODED VEHICLE DATA!)
 # ==========================================
 def scrape_vicroads_rego(plate_number: str) -> str:
-    """Submit plate directly to official VicRoads web portal and parse returned HTML."""
+    """Submit ANY plate dynamically to official VicRoads web portal and parse returned HTML live."""
     clean_plate = re.sub(r'[^A-Za-z0-9]', '', plate_number).upper()
     vicroads_portal_url = "https://www.vicroads.vic.gov.au/registration/buy-sell-or-transfer-a-vehicle/check-vehicle-registration/vehicle-registration-enquiry"
     
@@ -178,7 +178,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                         if name:
                             form_data[name] = val
 
-                    # Set parameters for exact VicRoads Sitecore fields
+                    # Set parameters for exact VicRoads Sitecore fields dynamically
                     for k in list(form_data.keys()):
                         if 'InputFields[0].Value' in k:
                             form_data[k] = 'car'
@@ -220,7 +220,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
                             elif l == "VIN/Chassis" and idx + 1 < len(lines):
                                 vin = lines[idx + 1]
 
-                        if status_expiry:
+                        if status_expiry or make:
                             vin_str = f"\n  • *VIN:* `{vin}`" if vin else ""
                             return (
                                 f"🏎️ *Plate `{clean_plate}`:*\n"
@@ -230,15 +230,7 @@ def scrape_vicroads_rego(plate_number: str) -> str:
         except Exception as e:
             print(f"VicRoads direct web scrape exception for {clean_plate}: {e}")
 
-    # Fallback to direct VicRoads official register records for default plates
-    if clean_plate == "2EN7KC":
-        return f"🏎️ *Plate `2EN7KC`:*\n  • *Status & Expiry:* *Current - 10/12/2026*\n  • *Vehicle:* VOLKSWAGEN (2020) SEDAN WHITE | VIN: `WVWZZZAUZLW065785`\n"
-    elif clean_plate == "1VI8UL":
-        return f"🏎️ *Plate `1VI8UL`:*\n  • *Status & Expiry:* *Current - 14/11/2026*\n  • *Vehicle:* MAZDA (2021) HATCH SILVER\n"
-    elif clean_plate == "2BI6SU":
-        return f"🏎️ *Plate `2BI6SU`:*\n  • *Status & Expiry:* *Current - 16/11/2026*\n  • *Vehicle:* M.G. (2021) WAGON BLUE\n"
-
-    return f"🏎️ *Plate `{clean_plate}`:* Scraped VicRoads Web Portal\n"
+    return f"🌐 *Plate `{clean_plate}`:* Scraped VicRoads Web Portal (Status {res.status_code if 'res' in locals() else 'Error'})\n"
 
 def tool_check_vicroads_rego(query: str = "") -> str:
     """Check VicRoads registration directly on vicroads.vic.gov.au portal live."""
@@ -255,7 +247,7 @@ def tool_check_vicroads_rego(query: str = "") -> str:
         results_list.append(res_str)
         time.sleep(0.5)
         
-    header = "🚘 *DIRECT VICROADS WEB PORTAL SEARCH RESULT*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    header = "🚘 *100% PURE DYNAMIC VICROADS WEB PORTAL SCRAPE*\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     body = "\n".join(results_list)
     footer = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -317,7 +309,7 @@ def classify_email_with_ai(sender: str, subject: str, snippet: str) -> dict:
 # ==========================================
 def autonomous_gmail_push_loop():
     """Runs continuously on Render: Scans UNREAD Gmails, filters out spam, and pushes IMPORTANT emails to Telegram!"""
-    print("🚀 Starting Direct VicRoads Web Portal Inspector & Gmail Push Engine...")
+    print("🚀 Starting Pure Dynamic VicRoads Web Portal Inspector & Gmail Push Engine...")
     
     gmail, _ = get_google_services()
     if gmail:
@@ -506,7 +498,7 @@ def run_telegram_agent():
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
     offset = 0
-    print(f"🚀 Direct VicRoads Web Portal Inspector Agent is LIVE 24/7...")
+    print(f"🚀 Pure Dynamic VicRoads Web Portal Inspector Agent is LIVE 24/7...")
     
     while True:
         try:
