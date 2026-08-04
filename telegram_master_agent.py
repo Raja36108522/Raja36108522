@@ -264,21 +264,13 @@ def tool_check_vicroads_rego(query: str = "") -> str:
     plates = re.findall(r'\b[0-9][A-Z]{2}[0-9][A-Z]{2}\b|\b[0-9][A-Z]{3}[0-9][A-Z]\b', query.upper())
     
     if not plates:
-        return (
-            "🚘 *VICROADS REGO CHECK*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Please type the registration plate number you want to check!\n"
-            "👉 *Examples:*\n"
-            "• `rego 2EN7KC`\n"
-            "• `rego 1VI8UL`\n"
-            "• `rego 2BI6SU`\n"
-            "• `rego 2EN7KV`\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🌐 VicRoads Official Register Inspector"
-        )
+        # Default to checking all owner vehicles if button clicked
+        target_plates = ["2EN7KC", "1VI8UL", "2BI6SU", "2EN7KV"]
+    else:
+        target_plates = plates
         
     results_list = []
-    for p in plates:
+    for p in target_plates:
         res_str = scrape_vicroads_rego(p)
         results_list.append(res_str)
         time.sleep(0.3)
@@ -287,7 +279,8 @@ def tool_check_vicroads_rego(query: str = "") -> str:
     body = "\n".join(results_list)
     footer = (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🌐 Scraped Live from vicroads.vic.gov.au"
+        "💡 *Tip:* To check any custom car, type: `rego <PLATE>`!\n"
+        "🌐 VicRoads Official Register Inspector"
     )
     return header + body + footer
 
